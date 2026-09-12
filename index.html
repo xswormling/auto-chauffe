@@ -119,6 +119,7 @@
     const note = frequencyToNoteName(freq);
 
     document.getElementById("note").innerText = "Note détectée : " + note;
+    window.detectedNote = note;
 
     requestAnimationFrame(detectPitch);
   }
