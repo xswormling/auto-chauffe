@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Auto‑chauffe</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="./manifest.webmanifest">
+  <meta name="theme-color" content="#222222">
+
+  <!-- OSMD via CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay/build/opensheetmusicdisplay.min.js"></script>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      background: #f4f4f4;
+      padding: 15px;
+    }
+    h1 { text-align: center; }
+    #osmd {
+      background: white;
+      padding: 10px;
+      border-radius: 8px;
+      box-shadow: 0 0 8px rgba(0,0,0,0.1);
+      margin-top: 20px;
+    }
+    button {
+      padding: 10px 15px;
+      font-size: 1em;
+      border: none;
+      border-radius: 6px;
+      background: #3a6ea5;
+      color: white;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    #note {
+      font-size: 1.3em;
+      margin-top: 10px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+
+<body>
+
+<h1>Auto‑chauffe</h1>
+
+<h2>Charger une partition (MusicXML)</h2>
+<input type="file" id="xml-file" accept=".xml,.musicxml">
+
+<div id="osmd"></div>
+
+<h2>Détection audio</h2>
+<button id="start-audio">Démarrer micro</button>
+<div id="note">Note détectée : —</div>
+
+<h2>Transposition</h2>
+<button id="transpose-up">Transpose +1</button>
+<button id="transpose-down">Transpose -1</button>
+
+<script>
+  /* -----------------------------
+     1. OSMD + chargement client
+  ----------------------------- */
+  const osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay("osmd", {
+    autoResize: true,
+  });
+
+  document.getElementById("xml-file").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    const text = await file.text();
+    await osmd.load(text);
+    osmd.render();
+  });
+
+
+  /* -----------------------------
+     2. Détection audio (auto-corrélation simple)
+  ----------------------------- */
+  let audioContext, analyser, dataArray;
+
+  document.getElementById("start-audio").onclick = async () => {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const source = audioContext.createMediaStreamSource(stream);
+
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 2048;
+
+    source.connect(analyser);
+    dataArray = new Float32Array(analyser.fftSize);
+
+    detectPitch();
+  };
+
+  function detectPitch() {
+    analyser.getFloatTimeDomainData(dataArray);
+
+    let bestOffset = -1;
+    let bestCorrelation = 0;
+
+    for (let offset = 1; offset < 1000; offset++) {
+      let correlation = 0;
+      for (let i = 0; i < dataArray.length - offset; i++) {
+        correlation += dataArray[i] * dataArray[i + offset];
+      }
+      if (correlation > bestCorrelation) {
+        bestCorrelation = correlation;
+        bestOffset = offset;
+      }
+    }
+
+    const freq = audioContext.sampleRate / bestOffset;
+    const note = frequencyToNoteName(freq);
+
+    document.getElementById("note").innerText = "Note détectée : " + note;
+
+    requestAnimationFrame(detectPitch);
+  }
+
+  function frequencyToNoteName(freq) {
+    if (!freq || freq < 20 || freq > 5000) return "—";
+
+    const A4 = 440;
+    const semitone = 12 * Math.log2(freq / A4);
+    const noteIndex = Math.round(semitone) + 57;
+
+    const names = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+    const name = names[noteIndex % 12];
+    const octave = Math.floor(noteIndex / 12);
+
+    return name + octave;
+  }
+
+
+  /* -----------------------------
+     3. Transposition
+  ----------------------------- */
+  document.getElementById("transpose-up").onclick = () => {
+    osmd.Sheet.Transpose += 1;
+    osmd.render();
+  };
+
+  document.getElementById("transpose-down").onclick = () => {
+    osmd.Sheet.Transpose -= 1;
+    osmd.render();
+  };
+
+
+  /* -----------------------------
+     4. Service Worker minimal
+  ----------------------------- */
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./sw.js");
+  }
+</script>
+
+</body>
+</html>
