@@ -78,65 +78,105 @@
     osmd.render();
   });
 
+<script>
+/* -------------------------------------------------------
+   MODULE AUDIO COMPLET — VERSION LUDIQUE RESTAURÉE
+-------------------------------------------------------- */
 
-  /* -----------------------------
-     2. Détection audio (auto-corrélation simple)
-  ----------------------------- */
-  let audioContext, analyser, dataArray;
+let audioContext = null;
+let analyser = null;
+let dataArray = null;
+let listening = false;
+let detectedNote = null;
+let rafId = null;
 
-  document.getElementById("start-audio").onclick = async () => {
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const source = audioContext.createMediaStreamSource(stream);
+/* Boutons */
+const startBtn = document.getElementById("start-audio");
+const stopBtn = document.getElementById("stop-audio");
+const noteField = document.getElementById("note");
 
-    analyser = audioContext.createAnalyser();
-    analyser.fftSize = 2048;
+/* État du micro */
+function updateStatus(msg) {
+  noteField.innerText = msg;
+}
 
-    source.connect(analyser);
-    dataArray = new Float32Array(analyser.fftSize);
+/* Démarrer le micro */
+startBtn.onclick = async () => {
+  if (listening) return;
 
-    detectPitch();
-  };
+  audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const source = audioContext.createMediaStreamSource(stream);
 
-  function detectPitch() {
-    analyser.getFloatTimeDomainData(dataArray);
+  analyser = audioContext.createAnalyser();
+  analyser.fftSize = 2048;
 
-    let bestOffset = -1;
-    let bestCorrelation = 0;
+  source.connect(analyser);
+  dataArray = new Float32Array(analyser.fftSize);
 
-    for (let offset = 1; offset < 1000; offset++) {
-      let correlation = 0;
-      for (let i = 0; i < dataArray.length - offset; i++) {
-        correlation += dataArray[i] * dataArray[i + offset];
-      }
-      if (correlation > bestCorrelation) {
-        bestCorrelation = correlation;
-        bestOffset = offset;
-      }
+  listening = true;
+  updateStatus("Écoute en cours…");
+
+  detectPitch();
+};
+
+/* Arrêter le micro */
+stopBtn.onclick = () => {
+  listening = false;
+  if (rafId) cancelAnimationFrame(rafId);
+  updateStatus("Micro arrêté");
+};
+
+/* Détection robuste */
+function detectPitch() {
+  if (!listening) return;
+
+  analyser.getFloatTimeDomainData(dataArray);
+
+  let bestOffset = -1;
+  let bestCorrelation = 0;
+
+  // autocorrélation robuste
+  for (let offset = 1; offset < 1000; offset++) {
+    let correlation = 0;
+    for (let i = 0; i < dataArray.length - offset; i++) {
+      correlation += dataArray[i] * dataArray[i + offset];
     }
-
-    const freq = audioContext.sampleRate / bestOffset;
-    const note = frequencyToNoteName(freq);
-
-    document.getElementById("note").innerText = "Note détectée : " + note;
-    window.detectedNote = note;
-
-    requestAnimationFrame(detectPitch);
+    if (correlation > bestCorrelation) {
+      bestCorrelation = correlation;
+      bestOffset = offset;
+    }
   }
 
-  function frequencyToNoteName(freq) {
-    if (!freq || freq < 20 || freq > 5000) return "—";
+  const freq = audioContext.sampleRate / bestOffset;
 
-    const A4 = 440;
-    const semitone = 12 * Math.log2(freq / A4);
-    const noteIndex = Math.round(semitone) + 57;
+  const note = frequencyToNoteName(freq);
 
-    const names = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
-    const name = names[noteIndex % 12];
-    const octave = Math.floor(noteIndex / 12);
+  detectedNote = note;          // ✔ note enregistrée
+  window.detectedNote = note;   // ✔ accessible globalement
 
-    return name + octave;
-  }
+  updateStatus("Note détectée : " + note);
+
+  rafId = requestAnimationFrame(detectPitch);
+}
+
+/* Conversion fréquence → nom de note */
+function frequencyToNoteName(freq) {
+  if (!freq || freq < 20 || freq > 5000) return "—";
+
+  const A4 = 440;
+  const semitone = 12 * Math.log2(freq / A4);
+  const noteIndex = Math.round(semitone) + 57;
+
+  const names = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  const name = names[noteIndex % 12];
+  const octave = Math.floor(noteIndex / 12);
+
+  return name + octave;
+}
+</script>
+
+
 
 
   /* -----------------------------
