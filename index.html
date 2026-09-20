@@ -1,202 +1,798 @@
 <!DOCTYPE html>
 <html lang="fr">
+
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8">
 
-  <title>Auto‑chauffe</title>
+<meta name="viewport"
+      content="width=device-width,
+               initial-scale=1,
+               viewport-fit=cover">
 
-  <!-- PWA -->
-  <link rel="manifest" href="./manifest.webmanifest">
-  <meta name="theme-color" content="#222222">
+<meta name="theme-color" content="#007aff">
 
-  <!-- OSMD via CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay/build/opensheetmusicdisplay.min.js"></script>
+<title>Auto-Chauffe Mobile</title>
 
-  <style>
-    body {
-      margin: 0;
-      font-family: sans-serif;
-      background: #f4f4f4;
-      padding: 15px;
-    }
-    h1 { text-align: center; }
-    #osmd {
-      background: white;
-      padding: 10px;
-      border-radius: 8px;
-      box-shadow: 0 0 8px rgba(0,0,0,0.1);
-      margin-top: 20px;
-    }
-    button {
-      padding: 10px 15px;
-      font-size: 1em;
-      border: none;
-      border-radius: 6px;
-      background: #3a6ea5;
-      color: white;
-      cursor: pointer;
-      margin-top: 10px;
-    }
-    #note {
-      font-size: 1.3em;
-      margin-top: 10px;
-      font-weight: bold;
-    }
-  </style>
+https://cdn.jsdelivr.net/npm/opensheetmusicdisplay/build/opensheetmusicdisplay.min.jsscript>
+
+<style>
+
+:root{
+  --primary:#007aff;
+  --bg:#f2f2f7;
+  --card:#ffffff;
+  --text:#1c1c1e;
+  --border:#dcdce0;
+}
+
+*{
+  box-sizing:border-box;
+}
+
+html,
+body{
+  margin:0;
+  padding:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:-apple-system,
+              BlinkMacSystemFont,
+              "Segoe UI",
+              Roboto,
+              sans-serif;
+}
+
+header{
+  position:sticky;
+  top:0;
+  z-index:10;
+
+  background:var(--primary);
+  color:white;
+
+  text-align:center;
+  padding:20px;
+}
+
+header h1{
+  margin:0;
+  font-size:1.4rem;
+}
+
+header p{
+  margin:.5rem 0 0;
+}
+
+main{
+  max-width:1000px;
+  margin:auto;
+  padding:12px;
+}
+
+section{
+  background:var(--card);
+
+  border-radius:18px;
+
+  padding:16px;
+  margin-bottom:14px;
+
+  box-shadow:0 2px 10px rgba(0,0,0,.06);
+}
+
+.step-title{
+  font-weight:700;
+  margin-bottom:10px;
+}
+
+.btn,
+input[type=file]{
+
+  width:100%;
+  min-height:54px;
+
+  border:none;
+  border-radius:12px;
+
+  font-size:17px;
+
+  margin-top:8px;
+}
+
+.btn{
+  cursor:pointer;
+  background:var(--primary);
+  color:white;
+}
+
+.btn:disabled{
+  background:#b0b0b0;
+}
+
+#fileInfo,
+#audioStatus,
+#noteInfo,
+#intervalInfo,
+#resultInfo{
+  margin-top:10px;
+  font-weight:600;
+}
+
+#osmdOriginal,
+#osmdTransposed{
+
+  width:100%;
+  overflow-x:auto;
+
+  border:1px solid var(--border);
+  border-radius:12px;
+
+  background:white;
+
+  padding:10px;
+  margin-top:10px;
+}
+
+.log{
+  max-height:220px;
+  overflow-y:auto;
+
+  border:1px solid var(--border);
+  border-radius:12px;
+
+  padding:10px;
+
+  background:#fafafa;
+
+  font-family:monospace;
+  font-size:13px;
+
+  white-space:pre-wrap;
+}
+
+@media(max-width:700px){
+
+  header h1{
+    font-size:1.15rem;
+  }
+
+  .btn{
+    font-size:16px;
+  }
+
+}
+
+</style>
+
 </head>
 
 <body>
 
-<h1>Auto‑chauffe bis</h1>
+<header>
+  <h1>🎵 Auto‑Chauffe</h1>
+  <p>D2a‑1 • Diatonique strict • Mobile iPhone</p>
+</header>
 
-<h2>Charger une partition de chauffe (MusicXML)</h2>
-<input type="file" id="xml-file" accept=".xml,.musicxml">
+<main>
 
-<div id="osmd"></div>
+<section>
 
-<h2>Détection audio</h2>
-<button id="start-audio">Démarrer micro</button>
-<div id="note">Note détectée : —</div>
+  <div class="step-title">
+    Étape 1 – Charger une partition
+  </div>
 
-<h2>Transposition</h2>
-<button id="transpose-up">Transpose +1</button>
-<button id="transpose-down">Transpose -1</button>
+  <input
+      type="file"
+      id="xmlInput"
+      accept=".musicxml,.xml">
+
+  <div id="fileInfo"></div>
+
+  <h3>Partition originale</h3>
+
+  <div id="osmdOriginal"></div>
+
+</section>
+
+<section>
+
+  <div class="step-title">
+    Étape 2 – Détection audio
+  </div>
+
+  <button id="startAudioBtn" class="btn">
+    🎤 Démarrer l'écoute
+  </button>
+
+  <button id="stopAudioBtn"
+          class="btn"
+          disabled>
+    🛑 Arrêter
+  </button>
+
+  <div id="audioStatus"></div>
+  <div id="noteInfo"></div>
+  <div id="intervalInfo"></div>
+
+</section>
+
+<section>
+
+  <div class="step-title">
+    Étape 3 – Transposition D2a‑1
+  </div>
+
+  <button id="transposeBtn"
+          class="btn"
+          disabled>
+
+     🎼 Transposer
+
+  </button>
+
+  <div id="resultInfo"></div>
+
+  <h3>Partition transposée</h3>
+
+  <div id="osmdTransposed"></div>
+
+</section>
+
+<section>
+
+  <div class="step-title">
+    Journal
+  </div>
+
+  <div id="log" class="log"></div>
+
+</section>
+
+</main>
 
 <script>
-  /* -----------------------------
-     1. OSMD + chargement client
-  ----------------------------- */
-  const osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay("osmd", {
-    autoResize: true,
-  });
 
-  document.getElementById("xml-file").addEventListener("change", async (e) => {
-    const file = e.target.files[0];
-    const text = await file.text();
-    await osmd.load(text);
-    osmd.render();
-  });
+let osmdOriginal = null;
+let osmdTransposed = null;
 
-/* -------------------------------------------------------
-   MODULE AUDIO COMPLET — VERSION LUDIQUE RESTAURÉE
--------------------------------------------------------- */
+let xmlContent = null;
+
+let firstNoteMidi = null;
+
+let playedNote = null;
+
+let interval = 0;
+
+let initialFifths = 0;
+let initialMode = "major";
+
+const xmlInput = document.getElementById("xmlInput");
+
+const fileInfo = document.getElementById("fileInfo");
+
+const startAudioBtn = document.getElementById("startAudioBtn");
+const stopAudioBtn = document.getElementById("stopAudioBtn");
+
+const audioStatus = document.getElementById("audioStatus");
+
+const noteInfo = document.getElementById("noteInfo");
+
+const intervalInfo = document.getElementById("intervalInfo");
+
+const transposeBtn = document.getElementById("transposeBtn");
+
+const resultInfo = document.getElementById("resultInfo");
+
+const logDiv = document.getElementById("log");
+
+function log(message){
+
+  console.log(message);
+
+  logDiv.textContent += message + "\n";
+
+  logDiv.scrollTop = logDiv.scrollHeight;
+}
+
+function midiFromNote(step, alter, octave){
+
+  const values = {
+    C:0,
+    D:2,
+    E:4,
+    F:5,
+    G:7,
+    A:9,
+    B:11
+  };
+
+  return (
+    12 * (octave + 1)
+    + values[step]
+    + alter
+  );
+}
+
+function noteFromMidi(midi){
+
+  const notes =
+  [
+    "C","C#","D","D#","E","F",
+    "F#","G","G#","A","A#","B"
+  ];
+
+  const name = notes[midi % 12];
+
+  const octave =
+      Math.floor(midi / 12) - 1;
+
+  return {
+    step:name[0],
+    alter:name.includes("#") ? 1 : 0,
+    octave
+  };
+}
+
+xmlInput.addEventListener("change", () => {
+
+  const file = xmlInput.files[0];
+
+  if(!file) return;
+
+  const reader = new FileReader();
+
+  reader.onload = async (e) => {
+
+    xmlContent = e.target.result;
+
+    fileInfo.textContent =
+      "Partition chargée : " + file.name;
+
+    const parser =
+      new DOMParser();
+
+    const xmlDoc =
+      parser.parseFromString(
+        xmlContent,
+        "application/xml"
+      );
+
+    const firstNoteNode =
+      xmlDoc.querySelector("note pitch");
+
+    if(firstNoteNode){
+
+      const step =
+        firstNoteNode.querySelector("step").textContent;
+
+      const octave =
+        parseInt(
+          firstNoteNode.querySelector("octave").textContent
+        );
+
+      const alterNode =
+        firstNoteNode.querySelector("alter");
+
+      const alter =
+        alterNode
+          ? parseInt(alterNode.textContent)
+          : 0;
+
+      firstNoteMidi =
+        midiFromNote(step,alter,octave);
+
+      log(
+        "Première note : "
+        + step
+        + (alter===1 ? "#" : "")
+        + octave
+      );
+    }
+
+    const keyNode =
+      xmlDoc.querySelector("key");
+
+    if(keyNode){
+
+      initialFifths =
+        parseInt(
+          keyNode.querySelector("fifths").textContent
+        );
+
+      const modeNode =
+        keyNode.querySelector("mode");
+
+      if(modeNode){
+        initialMode = modeNode.textContent;
+      }
+    }
+
+    osmdOriginal =
+      new opensheetmusicdisplay.OpenSheetMusicDisplay(
+        "osmdOriginal"
+      );
+
+    await osmdOriginal.load(xmlContent);
+
+    osmdOriginal.render();
+
+    log("Partition affichée.");
+  };
+
+  reader.readAsText(file);
+
+});
 
 let audioContext = null;
 let analyser = null;
-let dataArray = null;
-let listening = false;
-let detectedNote = null;
-let rafId = null;
+let mediaStream = null;
+let audioInterval = null;
 
-/* Boutons */
-const startBtn = document.getElementById("start-audio");
-const stopBtn = document.getElementById("stop-audio");
-const noteField = document.getElementById("note");
+function autoCorrelate(buffer, sampleRate){
 
-/* État du micro */
-function updateStatus(msg) {
-  noteField.innerText = msg;
-}
+  let SIZE = buffer.length;
 
-/* Démarrer le micro */
-startBtn.onclick = async () => {
-  if (listening) return;
+  let rms = 0;
 
-  audioContext = new (window.AudioContext || window.webkitAudioContext)();
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  const source = audioContext.createMediaStreamSource(stream);
+  for(let i=0;i<SIZE;i++){
 
-  analyser = audioContext.createAnalyser();
-  analyser.fftSize = 2048;
+    rms += buffer[i] * buffer[i];
+  }
 
-  source.connect(analyser);
-  dataArray = new Float32Array(analyser.fftSize);
+  rms = Math.sqrt(rms / SIZE);
 
-  listening = true;
-  updateStatus("Écoute en cours…");
+  if(rms < 0.01){
+    return -1;
+  }
 
-  detectPitch();
-};
+  let c = new Array(SIZE).fill(0);
 
-/* Arrêter le micro */
-stopBtn.onclick = () => {
-  listening = false;
-  if (rafId) cancelAnimationFrame(rafId);
-  updateStatus("Micro arrêté");
-};
+  for(let i=0;i<SIZE;i++){
 
-/* Détection robuste */
-function detectPitch() {
-  if (!listening) return;
+    for(let j=0;j<SIZE-i;j++){
 
-  analyser.getFloatTimeDomainData(dataArray);
-
-  let bestOffset = -1;
-  let bestCorrelation = 0;
-
-  // autocorrélation robuste
-  for (let offset = 1; offset < 1000; offset++) {
-    let correlation = 0;
-    for (let i = 0; i < dataArray.length - offset; i++) {
-      correlation += dataArray[i] * dataArray[i + offset];
-    }
-    if (correlation > bestCorrelation) {
-      bestCorrelation = correlation;
-      bestOffset = offset;
+      c[i] += buffer[j] * buffer[j+i];
     }
   }
 
-  const freq = audioContext.sampleRate / bestOffset;
+  let d = 0;
 
-  const note = frequencyToNoteName(freq);
+  while(c[d] > c[d+1]) d++;
 
-  detectedNote = note;          // ✔ note enregistrée
-  window.detectedNote = note;   // ✔ accessible globalement
+  let maxval = -1;
+  let maxpos = -1;
 
-  updateStatus("Note détectée : " + note);
+  for(let i=d;i<SIZE;i++){
 
-  rafId = requestAnimationFrame(detectPitch);
-}
+    if(c[i] > maxval){
 
-/* Conversion fréquence → nom de note */
-function frequencyToNoteName(freq) {
-  if (!freq || freq < 20 || freq > 5000) return "—";
-
-  const A4 = 440;
-  const semitone = 12 * Math.log2(freq / A4);
-  const noteIndex = Math.round(semitone) + 57;
-
-  const names = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
-  const name = names[noteIndex % 12];
-  const octave = Math.floor(noteIndex / 12);
-
-  return name + octave;
-}
-
-
-
-
-  /* -----------------------------
-     3. Transposition
-  ----------------------------- */
-  document.getElementById("transpose-up").onclick = () => {
-    osmd.Sheet.Transpose += 1;
-    osmd.render();
-  };
-
-  document.getElementById("transpose-down").onclick = () => {
-    osmd.Sheet.Transpose -= 1;
-    osmd.render();
-  };
-
-
-  /* -----------------------------
-     4. Service Worker minimal
-  ----------------------------- */
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("./sw.js");
+      maxval = c[i];
+      maxpos = i;
+    }
   }
+
+  return sampleRate / maxpos;
+}
+
+function freqToNoteName(freq){
+
+  const midi =
+    Math.round(
+      69 + 12 * Math.log2(freq / 440)
+    );
+
+  const note =
+    noteFromMidi(midi);
+
+  let display = note.step;
+
+  if(note.alter === 1){
+    display += "#";
+  }
+
+  display += note.octave;
+
+  return {
+    midi,
+    display
+  };
+}
+
+startAudioBtn.addEventListener(
+  "click",
+  async () => {
+
+    try{
+
+      audioContext =
+        new (
+          window.AudioContext
+          || window.webkitAudioContext
+        )();
+
+      await audioContext.resume();
+
+      mediaStream =
+        await navigator.mediaDevices.getUserMedia({
+          audio:true
+        });
+
+      const source =
+        audioContext.createMediaStreamSource(
+          mediaStream
+        );
+
+      analyser =
+        audioContext.createAnalyser();
+
+      analyser.fftSize = 2048;
+
+      source.connect(analyser);
+
+      startAudioBtn.disabled = true;
+      stopAudioBtn.disabled = false;
+
+      audioStatus.textContent =
+        "🎤 Écoute en cours";
+
+      const buffer =
+        new Float32Array(analyser.fftSize);
+
+      audioInterval =
+        setInterval(() => {
+
+          analyser.getFloatTimeDomainData(
+            buffer
+          );
+
+          const freq =
+            autoCorrelate(
+              buffer,
+              audioContext.sampleRate
+            );
+
+          if(freq > 0){
+
+            const data =
+              freqToNoteName(freq);
+
+            playedNote =
+              data.display;
+
+            noteInfo.textContent =
+              "Note détectée : "
+              + playedNote;
+
+            if(firstNoteMidi !== null){
+
+              interval =
+                data.midi
+                - firstNoteMidi;
+
+              intervalInfo.textContent =
+                "Intervalle : "
+                + (interval >= 0 ? "+" : "")
+                + interval
+                + " demi-tons";
+
+              transposeBtn.disabled = false;
+            }
+          }
+
+        },200);
+
+    }
+    catch(error){
+
+      console.error(error);
+
+      audioStatus.textContent =
+        "Erreur microphone.";
+    }
+});
+
+stopAudioBtn.addEventListener(
+  "click",
+  () => {
+
+    if(audioInterval){
+
+      clearInterval(audioInterval);
+    }
+
+    if(mediaStream){
+
+      mediaStream
+      .getTracks()
+      .forEach(t => t.stop());
+    }
+
+    if(audioContext){
+
+      audioContext.close();
+    }
+
+    startAudioBtn.disabled = false;
+    stopAudioBtn.disabled = true;
+
+    audioStatus.textContent =
+      "Arrêté.";
+});
+
+transposeBtn.addEventListener(
+  "click",
+  async () => {
+
+    if(!xmlContent) return;
+
+    const parser =
+      new DOMParser();
+
+    const xmlDoc =
+      parser.parseFromString(
+        xmlContent,
+        "application/xml"
+      );
+
+    const notes =
+      xmlDoc.querySelectorAll("note");
+
+    const stepOrder =
+      ["C","D","E","F","G","A","B"];
+
+    const firstStep =
+      noteFromMidi(firstNoteMidi).step;
+
+    const playedStep =
+      playedNote[0];
+
+    const idxFirst =
+      stepOrder.indexOf(firstStep);
+
+    const idxPlayed =
+      stepOrder.indexOf(playedStep);
+
+    let diatonicSteps =
+      idxPlayed - idxFirst;
+
+    if(diatonicSteps < 0){
+      diatonicSteps += 7;
+    }
+
+    notes.forEach(note => {
+
+      const pitch =
+        note.querySelector("pitch");
+
+      if(!pitch) return;
+
+      const step =
+        pitch.querySelector("step").textContent;
+
+      const octave =
+        parseInt(
+          pitch.querySelector("octave").textContent
+        );
+
+      const alterNode =
+        pitch.querySelector("alter");
+
+      const alter =
+        alterNode
+          ? parseInt(alterNode.textContent)
+          : 0;
+
+      const midiOld =
+        midiFromNote(
+          step,
+          alter,
+          octave
+        );
+
+      const midiTarget =
+        midiOld + interval;
+
+      const idxOld =
+        stepOrder.indexOf(step);
+
+      const idxNew =
+        (idxOld + diatonicSteps) % 7;
+
+      const newStep =
+        stepOrder[idxNew];
+
+      let bestOctave = octave;
+      let bestDiff = Infinity;
+
+      for(let o=octave-1;o<=octave+1;o++){
+
+        const baseMidi =
+          midiFromNote(
+            newStep,
+            0,
+            o
+          );
+
+        const diff =
+          Math.abs(
+            baseMidi - midiTarget
+          );
+
+        if(diff < bestDiff){
+
+          bestDiff = diff;
+
+          bestOctave = o;
+        }
+      }
+
+      const baseMidi =
+        midiFromNote(
+          newStep,
+          0,
+          bestOctave
+        );
+
+      let newAlter =
+        midiTarget - baseMidi;
+
+      pitch.querySelector("step").textContent =
+        newStep;
+
+      pitch.querySelector("octave").textContent =
+        bestOctave;
+
+      if(newAlter !== 0){
+
+        if(!alterNode){
+
+          const node =
+            xmlDoc.createElement("alter");
+
+          node.textContent = newAlter;
+
+          pitch.appendChild(node);
+        }
+        else{
+
+          alterNode.textContent =
+            newAlter;
+        }
+      }
+      else if(alterNode){
+
+        alterNode.remove();
+      }
+
+    });
+
+    const serializer =
+      new XMLSerializer();
+
+    const xmlTransposed =
+      serializer.serializeToString(xmlDoc);
+
+    osmdTransposed =
+      new opensheetmusicdisplay.OpenSheetMusicDisplay(
+        "osmdTransposed"
+      );
+
+    await osmdTransposed.load(
+      xmlTransposed
+    );
+
+    osmdTransposed.render();
+
+    resultInfo.textContent =
+      "✅ Transposition D2a‑1 effectuée.";
+});
+
+document.addEventListener(
+  "touchstart",
+  () => {},
+  { passive:true }
+);
+
 </script>
 
 </body>
