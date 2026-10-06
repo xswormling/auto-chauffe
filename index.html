@@ -70,16 +70,13 @@
       color: #fff;
       cursor: pointer;
       padding: 0 12px;
+      -webkit-appearance: none;
+      appearance: none;
     }
 
     .btn:disabled {
       background: #aaa;
       cursor: not-allowed;
-    }
-
-    .secondary {
-      background: #f0f0f0;
-      color: var(--text);
     }
 
     #osmdOriginal, #osmdTransposed {
@@ -91,6 +88,7 @@
       background: white;
       -webkit-overflow-scrolling: touch;
       min-height: 180px;
+      touch-action: pan-x pan-y;
     }
 
     #osmdOriginal svg, #osmdTransposed svg {
@@ -118,9 +116,8 @@
       border-radius: 12px;
       padding: 10px;
       min-height: 120px;
+      overflow: auto;
     }
-
-    .hidden { display: none; }
   </style>
 </head>
 <body>
@@ -164,8 +161,6 @@
     const stopAudioBtn = document.getElementById('stopAudioBtn');
     const transposeBtn = document.getElementById('transposeBtn');
 
-    let osmdOriginal = null;
-    let osmdTransposed = null;
     let xmlContent = null;
     let firstNoteMidi = null;
     let playedNote = null;
@@ -173,6 +168,8 @@
     let analyser = null;
     let mediaStream = null;
     let audioInterval = null;
+    let lastDetectedFrequency = null;
+    let stablePitchSamples = [];
 
     function setStatus(el, text, type = '') {
       el.textContent = text;
@@ -185,11 +182,7 @@
       logDiv.scrollTop = logDiv.scrollHeight;
     }
 
-    function clamp(value, min, max) {
-      return Math.min(Math.max(value, min), max);
-    }
-
-    function midiFromNote(step, alter, octave) {
+    function toMidiFromPitch(step, alter, octave) {
       const map = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
       const base = map[step];
       if (base === undefined) return null;
@@ -198,58 +191,53 @@
 
     function noteFromMidi(midi) {
       const names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-      const step = names[midi % 12];
-      const note = {
-        step: step[0],
-        alter: step.includes('#') ? 1 : 0,
+      const name = names[midi % 12];
+      return {
+        step: name[0],
+        alter: name.includes('#') ? 1 : 0,
         octave: Math.floor(midi / 12) - 1
       };
-      return note;
     }
 
-    function midiToDisplayName(midi) {
+    function midiToName(midi) {
       const names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
       const name = names[midi % 12];
       const octave = Math.floor(midi / 12) - 1;
-      return name + octave;
+      return `${name}${octave}`;
     }
 
-    function noteNameFromFrequency(freq) {
+    function noteFromFrequency(freq) {
       if (!Number.isFinite(freq) || freq <= 0) return null;
       const midi = Math.round(69 + 12 * Math.log2(freq / 440));
-      return {
-        midi,
-        display: midiToDisplayName(midi)
-      };
-    }
-
-    function getNearestMidi(freq) {
-      if (!Number.isFinite(freq) || freq <= 0) return null;
-      return Math.round(69 + 12 * Math.log2(freq / 440));
+      return { midi, display: midiToName(midi) };
     }
 
     function autoCorrelate(buffer, sampleRate) {
-      const SIZE = buffer.length;
+      const size = buffer.length;
       let rms = 0;
-      for (let i = 0; i < SIZE; i++) {
-        const val = buffer[i];
-        rms += val * val;
+
+      for (let i = 0; i < size; i++) {
+        const v = buffer[i];
+        rms += v * v;
       }
-      rms = Math.sqrt(rms / SIZE);
+
+      rms = Math.sqrt(rms / size);
       if (rms < 0.01) return -1;
 
       let bestOffset = -1;
       let bestCorrelation = 0;
-      const maxSamples = Math.floor(SIZE / 2);
+      const maxOffset = Math.floor(size / 2);
 
-      for (let offset = 1; offset < maxSamples; offset++) {
+      for (let offset = 1; offset < maxOffset; offset++) {
         let correlation = 0;
-        for (let i = 0; i < maxSamples; i++) {
+
+        for (let i = 0; i < maxOffset; i++) {
           const a = buffer[i];
           const b = buffer[i + offset];
-          correlation += (a * b);
+          correlation += a * b;
         }
-        correlation /= maxSamples;
+
+        correlation /= maxOffset;
         if (correlation > bestCorrelation) {
           bestCorrelation = correlation;
           bestOffset = offset;
@@ -258,11 +246,19 @@
 
       if (bestOffset <= 0) return -1;
 
-      const freq = sampleRate / bestOffset;
-      return freq;
+      return sampleRate / bestOffset;
     }
 
-    async function renderScore(containerId, xml) {
+    function getMedian(values) {
+      if (!values.length) return null;
+      const sorted = [...values].sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      return sorted.length % 2 === 0
+        ? (sorted[mid - 1] + sorted[mid]) / 2
+        : sorted[mid];
+    }
+
+    function renderScore(containerId, xml) {
       const container = document.getElementById(containerId);
       if (!container) return null;
 
@@ -272,9 +268,10 @@
           drawingParameters: 'compacttight'
         });
 
-        await osmd.load(xml);
-        osmd.Zoom = Math.min(1.6, window.innerWidth < 700 ? 0.9 : 1.2);
-        return osmd;
+        return osmd.load(xml).then(() => {
+          osmd.Zoom = Math.min(1.4, window.innerWidth < 700 ? 0.95 : 1.2);
+          return osmd;
+        });
       } catch (err) {
         console.error('renderScore error:', err);
         setStatus(fileInfo, 'Erreur de rendu de la partition.', 'error');
@@ -282,47 +279,65 @@
       }
     }
 
-    function resetAudioState() {
+    function stopAudio() {
       if (audioInterval) {
         clearInterval(audioInterval);
         audioInterval = null;
       }
+
       if (mediaStream) {
         mediaStream.getTracks().forEach(track => track.stop());
         mediaStream = null;
       }
+
       if (audioContext && audioContext.state !== 'closed') {
         try {
           audioContext.close();
         } catch (e) {}
       }
+
       audioContext = null;
       analyser = null;
+      lastDetectedFrequency = null;
+      stablePitchSamples = [];
+      playedNote = null;
+
+      startAudioBtn.disabled = false;
+      stopAudioBtn.disabled = true;
+      setStatus(audioStatus, 'Écoute arrêtée.', '');
+      noteInfo.textContent = '';
     }
 
-    async function startListening() {
+    async function startAudio() {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        setStatus(audioStatus, 'Votre navigateur ne supporte pas l’entrée microphone.', 'error');
+        setStatus(audioStatus, 'Mic non supporté sur ce navigateur.', 'error');
         return;
       }
 
       try {
-        resetAudioState();
+        const AudioCtor = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtor) {
+          setStatus(audioStatus, 'Web Audio non supporté.', 'error');
+          return;
+        }
 
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        audioContext = new AudioCtor();
+
         if (audioContext.state === 'suspended') {
           await audioContext.resume();
         }
 
-        mediaStream = await navigator.mediaDevices.getUserMedia({
+        const stream = await navigator.mediaDevices.getUserMedia({
           audio: {
             echoCancellation: true,
             noiseSuppression: true,
-            autoGainControl: true
+            autoGainControl: false
           }
         });
 
-        const source = audioContext.createMediaStreamSource(mediaStream);
+        mediaStream = stream;
+
+        const source = audioContext.createMediaStreamSource(stream);
         analyser = audioContext.createAnalyser();
         analyser.fftSize = 2048;
         analyser.smoothingTimeConstant = 0.2;
@@ -334,43 +349,45 @@
 
         audioInterval = setInterval(() => {
           try {
-            const bufferLength = analyser.fftSize;
-            const dataArray = new Float32Array(bufferLength);
-            analyser.getFloatTimeDomainData(dataArray);
+            if (!analyser || !audioContext) return;
 
-            const freq = autoCorrelate(dataArray, audioContext.sampleRate);
+            const data = new Float32Array(analyser.fftSize);
+            analyser.getFloatTimeDomainData(data);
+
+            const freq = autoCorrelate(data, audioContext.sampleRate);
             if (freq > 0 && freq < 20000) {
-              const note = noteNameFromFrequency(freq);
-              if (note) {
-                playedNote = note.midi;
-                noteInfo.textContent = `Note détectée : ${note.display} (${freq.toFixed(1)} Hz)`;
+              lastDetectedFrequency = freq;
+              stablePitchSamples.push(freq);
+
+              if (stablePitchSamples.length > 8) {
+                stablePitchSamples.shift();
+              }
+
+              const medianFreq = getMedian(stablePitchSamples);
+              if (medianFreq !== null) {
+                const note = noteFromFrequency(medianFreq);
+                if (note) {
+                  playedNote = note.midi;
+                  noteInfo.textContent = `Note détectée : ${note.display} (${medianFreq.toFixed(1)} Hz)`;
+                }
               }
             } else {
               noteInfo.textContent = 'Aucune note stable détectée';
             }
           } catch (err) {
-            console.error('Audio interval error:', err);
+            console.error('Audio detection error:', err);
             setStatus(audioStatus, 'Erreur de détection audio.', 'error');
           }
         }, 120);
+
       } catch (err) {
-        console.error('startListening error:', err);
+        console.error('startAudio error:', err);
         setStatus(audioStatus, 'Accès au microphone refusé ou indisponible.', 'error');
-        resetAudioState();
-        startAudioBtn.disabled = false;
-        stopAudioBtn.disabled = true;
+        stopAudio();
       }
     }
 
-    function stopListening() {
-      resetAudioState();
-      startAudioBtn.disabled = false;
-      stopAudioBtn.disabled = true;
-      setStatus(audioStatus, 'Écoute arrêtée.', '');
-      noteInfo.textContent = '';
-    }
-
-    function parseMidiPitchFromMusicXML(xmlText) {
+    function parsePitchDataFromMusicXML(xmlText) {
       const parser = new DOMParser();
       const xmlDoc = parser.parseFromString(xmlText, 'application/xml');
       const parserError = xmlDoc.querySelector('parsererror');
@@ -378,44 +395,8 @@
         throw new Error('Fichier MusicXML invalide.');
       }
 
-      const notes = Array.from(xmlDoc.querySelectorAll('note'));
+      const noteEls = Array.from(xmlDoc.querySelectorAll('note'));
       const pitchData = [];
-
-      for (const noteEl of notes) {
-        const restEl = noteEl.querySelector('rest');
-        if (restEl) continue;
-
-        const pitchEl = noteEl.querySelector('pitch');
-        if (!pitchEl) continue;
-
-        const stepEl = pitchEl.querySelector('step');
-        const alterEl = pitchEl.querySelector('alter');
-        const octaveEl = pitchEl.querySelector('octave');
-
-        if (!stepEl || !octaveEl) continue;
-
-        const step = stepEl.textContent.trim();
-        const alter = alterEl ? Number(alterEl.textContent.trim() || 0) : 0;
-        const octave = Number(octaveEl.textContent.trim());
-
-        const midi = midiFromNote(step, alter, octave);
-        if (midi !== null) {
-          pitchData.push(midi);
-        }
-      }
-
-      return pitchData;
-    }
-
-    function transposeMusicXML(xmlText, semitones) {
-      const parser = new DOMParser();
-      const xmlDoc = parser.parseFromString(xmlText, 'application/xml');
-      const parserError = xmlDoc.querySelector('parsererror');
-      if (parserError) {
-        throw new Error('Le fichier XML n’est pas valide.');
-      }
-
-      const noteEls = xmlDoc.querySelectorAll('note');
 
       for (const noteEl of noteEls) {
         const restEl = noteEl.querySelector('rest');
@@ -434,24 +415,55 @@
         const alter = alterEl ? Number(alterEl.textContent.trim() || 0) : 0;
         const octave = Number(octaveEl.textContent.trim());
 
-        const originalMidi = midiFromNote(step, alter, octave);
-        if (originalMidi === null) continue;
+        const midi = toMidiFromPitch(step, alter, octave);
+        if (midi !== null) pitchData.push(midi);
+      }
 
-        const transposedMidi = originalMidi + semitones;
+      return pitchData;
+    }
+
+    function transposeMusicXML(xmlText, semitones) {
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(xmlText, 'application/xml');
+      const parserError = xmlDoc.querySelector('parsererror');
+      if (parserError) {
+        throw new Error('XML invalide');
+      }
+
+      const notes = xmlDoc.querySelectorAll('note');
+
+      for (const noteEl of notes) {
+        const rest = noteEl.querySelector('rest');
+        if (rest) continue;
+
+        const pitch = noteEl.querySelector('pitch');
+        if (!pitch) continue;
+
+        const stepEl = pitch.querySelector('step');
+        const alterEl = pitch.querySelector('alter');
+        const octaveEl = pitch.querySelector('octave');
+
+        if (!stepEl || !octaveEl) continue;
+
+        const step = stepEl.textContent.trim();
+        const alter = alterEl ? Number(alterEl.textContent.trim() || 0) : 0;
+        const octave = Number(octaveEl.textContent.trim());
+
+        const midi = toMidiFromPitch(step, alter, octave);
+        if (midi === null) continue;
+
+        const transposedMidi = midi + semitones;
         const transposed = noteFromMidi(transposedMidi);
 
-        if (!transposed) continue;
-
         const names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-        const newStep = names[transposedMidi % 12];
-        const newAlter = newStep.includes('#') ? 1 : 0;
+        const newStepName = names[transposedMidi % 12];
+        stepEl.textContent = newStepName[0];
 
-        stepEl.textContent = newStep[0];
-        if (newAlter) {
+        if (newStepName.includes('#')) {
           if (!alterEl) {
             const newAlterEl = xmlDoc.createElement('alter');
             newAlterEl.textContent = '1';
-            pitchEl.appendChild(newAlterEl);
+            pitch.appendChild(newAlterEl);
           } else {
             alterEl.textContent = '1';
           }
@@ -467,10 +479,9 @@
       return new XMLSerializer().serializeToString(xmlDoc);
     }
 
-    function getFirstNoteMidi(noteList) {
-      if (!noteList.length) return null;
-      const sorted = [...noteList].sort((a, b) => a - b);
-      return sorted[0];
+    function getLowestMidiValue(values) {
+      if (!values.length) return null;
+      return [...values].sort((a, b) => a - b)[0];
     }
 
     xmlInput.addEventListener('change', async () => {
@@ -480,38 +491,47 @@
       try {
         const text = await file.text();
         xmlContent = text;
-        fileInfo.textContent = `Partition chargée : ${file.name}`;
 
-        if (typeof opensheetmusicdisplay !== 'undefined') {
-          osmdOriginal = await renderScore('osmdOriginal', xmlContent);
-          if (osmdOriginal) {
-            setStatus(fileInfo, `Partition chargée : ${file.name}`, 'ok');
-          }
-        }
+        setStatus(fileInfo, `Partition chargée : ${file.name}`, 'ok');
+        log(`Fichier chargé : ${file.name}`);
 
-        const melody = parseMidiPitchFromMusicXML(xmlContent);
-        if (melody.length) {
-          firstNoteMidi = getFirstNoteMidi(melody);
-          const firstName = midiToDisplayName(firstNoteMidi);
-          log(`Première note détectée dans la partition : ${firstName}`);
+        renderScore('osmdOriginal', xmlContent)
+          .then(() => {
+            log('Partition originale rendue.');
+          })
+          .catch(err => {
+            console.error(err);
+            setStatus(fileInfo, 'Erreur de rendu de la partition.', 'error');
+          });
+
+        const pitchData = parsePitchDataFromMusicXML(xmlContent);
+        if (pitchData.length) {
+          firstNoteMidi = getLowestMidiValue(pitchData);
           transposeBtn.disabled = false;
+          log(`Première note estimée de la partition : ${midiToName(firstNoteMidi)}`);
         } else {
           firstNoteMidi = null;
           transposeBtn.disabled = true;
-          log('Aucune note de hauteur trouvée dans le fichier XML.');
-          setStatus(fileInfo, `Partition chargée : ${file.name} (aucune note détectée)`, 'error');
+          log('Aucune note trouvée dans le MusicXML.');
+          setStatus(fileInfo, 'Partition chargée, mais aucune note détectée.', 'error');
         }
+
       } catch (err) {
-        console.error('XML load error:', err);
+        console.error('File read error:', err);
         xmlContent = null;
         transposeBtn.disabled = true;
         setStatus(fileInfo, 'Impossible de lire la partition.', 'error');
-        log('Erreur de lecture du fichier MusicXML.');
+        log('Erreur de lecture du fichier.');
       }
     });
 
-    startAudioBtn.addEventListener('click', startListening);
-    stopAudioBtn.addEventListener('click', stopListening);
+    startAudioBtn.addEventListener('click', () => {
+      startAudio();
+    });
+
+    stopAudioBtn.addEventListener('click', () => {
+      stopAudio();
+    });
 
     transposeBtn.addEventListener('click', async () => {
       if (!xmlContent) {
@@ -519,8 +539,8 @@
         return;
       }
 
-      if (playedNote === null || firstNoteMidi === null) {
-        setStatus(resultInfo, 'Aucune note audio ou note de base détectée.', 'error');
+      if (firstNoteMidi === null || playedNote === null) {
+        setStatus(resultInfo, 'Aucune note naturelle détectée pour transposer.', 'error');
         return;
       }
 
@@ -528,23 +548,27 @@
       const transposedXml = transposeMusicXML(xmlContent, semitones);
 
       try {
-        osmdTransposed = await renderScore('osmdTransposed', transposedXml);
+        await renderScore('osmdTransposed', transposedXml);
         const label = `${semitones >= 0 ? '+' : ''}${semitones} demi-tons`;
         setStatus(resultInfo, `Transposition appliquée : ${label}`, 'ok');
         log(`Transposition appliquée : ${label}`);
       } catch (err) {
-        console.error('Transpose error:', err);
+        console.error('Transpose failed:', err);
         setStatus(resultInfo, 'La transposition a échoué.', 'error');
       }
     });
 
-    window.addEventListener('resize', async () => {
+    window.addEventListener('resize', () => {
       if (!xmlContent) return;
-      try {
-        osmdOriginal = await renderScore('osmdOriginal', xmlContent);
-      } catch (err) {
-        console.error('Resize render error:', err);
-      }
+      // Avoid over-rendering on mobile Safari
+      clearTimeout(window.__renderTimeout);
+      window.__renderTimeout = setTimeout(async () => {
+        try {
+          await renderScore('osmdOriginal', xmlContent);
+        } catch (err) {
+          console.error('Resize render failed:', err);
+        }
+      }, 250);
     });
   </script>
 </body>
