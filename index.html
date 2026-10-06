@@ -212,43 +212,6 @@
       return { midi, display: midiToName(midi) };
     }
 
-    function autoCorrelate(buffer, sampleRate) {
-      const size = buffer.length;
-      let rms = 0;
-
-      for (let i = 0; i < size; i++) {
-        const v = buffer[i];
-        rms += v * v;
-      }
-
-      rms = Math.sqrt(rms / size);
-      if (rms < 0.01) return -1;
-
-      let bestOffset = -1;
-      let bestCorrelation = 0;
-      const maxOffset = Math.floor(size / 2);
-
-      for (let offset = 1; offset < maxOffset; offset++) {
-        let correlation = 0;
-
-        for (let i = 0; i < maxOffset; i++) {
-          const a = buffer[i];
-          const b = buffer[i + offset];
-          correlation += a * b;
-        }
-
-        correlation /= maxOffset;
-        if (correlation > bestCorrelation) {
-          bestCorrelation = correlation;
-          bestOffset = offset;
-        }
-      }
-
-      if (bestOffset <= 0) return -1;
-
-      return sampleRate / bestOffset;
-    }
-
     function getMedian(values) {
       if (!values.length) return null;
       const sorted = [...values].sort((a, b) => a - b);
@@ -256,6 +219,51 @@
       return sorted.length % 2 === 0
         ? (sorted[mid - 1] + sorted[mid]) / 2
         : sorted[mid];
+    }
+
+    function detectPitchFromFFT(analyser, sampleRate) {
+      const freqData = new Float32Array(analyser.fftSize);
+      analyser.getFloatFrequencyData(freqData);
+
+      let maxValue = -Infinity;
+      let dominantIndex = 0;
+
+      const minFrequency = 80;
+      const maxFrequency = 2000;
+
+      const minBin = Math.max(0, Math.floor(minFrequency * analyser.fftSize / sampleRate));
+      const maxBin = Math.min(freqData.length - 1, Math.ceil(maxFrequency * analyser.fftSize / sampleRate));
+
+      for (let i = minBin; i <= maxBin; i++) {
+        if (freqData[i] > maxValue) {
+          maxValue = freqData[i];
+          dominantIndex = i;
+        }
+      }
+
+      // Silencio / pas de note
+      if (maxValue > -55) {
+        const binWidth = sampleRate / analyser.fftSize;
+        let freq = dominantIndex * binWidth;
+
+        // Quadratic interpolation around peak for better precision
+        if (dominantIndex > 0 && dominantIndex < freqData.length - 1) {
+          const prev = freqData[dominantIndex - 1];
+          const curr = freqData[dominantIndex];
+          const next = freqData[dominantIndex + 1];
+          const denom = prev - 2 * curr + next;
+          if (denom !== 0) {
+            const delta = (prev - next) / (2 * denom);
+            freq = (dominantIndex + delta) * binWidth;
+          }
+        }
+
+        if (freq >= minFrequency && freq <= maxFrequency) {
+          return freq;
+        }
+      }
+
+      return null;
     }
 
     function renderScore(containerId, xml) {
@@ -339,7 +347,7 @@
 
         const source = audioContext.createMediaStreamSource(stream);
         analyser = audioContext.createAnalyser();
-        analyser.fftSize = 2048;
+        analyser.fftSize = 4096;
         analyser.smoothingTimeConstant = 0.2;
         source.connect(analyser);
 
@@ -351,15 +359,13 @@
           try {
             if (!analyser || !audioContext) return;
 
-            const data = new Float32Array(analyser.fftSize);
-            analyser.getFloatTimeDomainData(data);
+            const freq = detectPitchFromFFT(analyser, audioContext.sampleRate);
 
-            const freq = autoCorrelate(data, audioContext.sampleRate);
-            if (freq > 0 && freq < 20000) {
+            if (freq && Number.isFinite(freq)) {
               lastDetectedFrequency = freq;
               stablePitchSamples.push(freq);
 
-              if (stablePitchSamples.length > 8) {
+              if (stablePitchSamples.length > 12) {
                 stablePitchSamples.shift();
               }
 
@@ -560,7 +566,6 @@
 
     window.addEventListener('resize', () => {
       if (!xmlContent) return;
-      // Avoid over-rendering on mobile Safari
       clearTimeout(window.__renderTimeout);
       window.__renderTimeout = setTimeout(async () => {
         try {
