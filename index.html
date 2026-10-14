@@ -6,449 +6,244 @@
       name="viewport"
       content="width=device-width,initial-scale=1,viewport-fit=cover"
     />
-    <meta name="theme-color" content="#007aff" />
-    <title>Auto-Chauffe D2a-1 iPhone</title>
+    <meta name="theme-color" content="#ff6b6b" />
+    <title>Auto‑Chauffe — Version Rigolote</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@300;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@1.8.9/build/opensheetmusicdisplay.min.js"></script>
     <style>
       :root {
-        --primary: #007aff;
-        --bg: #f2f2f7;
+        --bg: linear-gradient(135deg,#ffd3b6 0%, #ffc3a0 25%, #ffb4a2 50%, #ff9a9e 100%);
         --card: #fff;
-        --border: #dcdce0;
+        --accent: #ff6b6b;
+        --accent-2: #ffb86b;
+        --muted: #6b6b6b;
       }
 
-      * {
-        box-sizing: border-box;
-      }
+      * { box-sizing: border-box; }
 
       body {
         margin: 0;
-        font-family:
-          -apple-system,
-          BlinkMacSystemFont,
-          Segoe UI,
-          sans-serif;
+        font-family: 'Nunito', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         background: var(--bg);
+        min-height: 100vh;
+        -webkit-font-smoothing:antialiased;
+        -moz-osx-font-smoothing:grayscale;
       }
 
       header {
-        background: var(--primary);
-        color: #fff;
-        padding: 18px;
+        background: transparent;
+        color: #3d3d3d;
+        padding: 28px 12px 6px 12px;
         text-align: center;
-        position: sticky;
-        top: 0;
       }
 
-      main {
-        max-width: 1000px;
-        margin: auto;
-        padding: 12px;
+      header h1 {
+        margin: 0;
+        font-family: 'Fredoka One', sans-serif;
+        font-size: 28px;
+        color: #3d3d3d;
+        text-shadow: 0 2px 0 rgba(255,255,255,0.6);
       }
 
-      section {
-        background: #fff;
-        border-radius: 16px;
-        padding: 16px;
+      main { max-width: 900px; margin: 12px auto; padding: 12px; }
+
+      .section {
+        background: var(--card);
+        border-radius: 18px;
+        padding: 14px;
         margin-bottom: 12px;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.06);
       }
 
-      .btn,
-      input[type="file"] {
-        width: 100%;
-        min-height: 52px;
-        border-radius: 12px;
-        margin-top: 8px;
+      .row { display:flex; gap:12px; align-items:center; }
+      .col { flex:1; }
+
+      input[type="file"]{ display:block; width:100%; padding:14px; border-radius:12px; border:2px dashed #ffe6d6; background:linear-gradient(90deg,#fffaf0,#fffdf7); }
+
+      .big-note {
+        height:140px; display:flex; align-items:center; justify-content:center; border-radius:14px; background: linear-gradient(180deg,#fff7f2,#fff6f6); font-size:48px; color:var(--accent);
+        border: 2px solid rgba(255,107,107,0.12);
       }
 
-      .btn {
-        border: none;
-        background: var(--primary);
-        color: #fff;
+      .btn { width:100%; min-height:54px; border-radius:12px; margin-top:8px; border:none; background:var(--accent); color:white; font-weight:700; font-size:16px; padding:12px; cursor:pointer; }
+      .btn.secondary { background:var(--accent-2); }
+      .btn:disabled { opacity:0.5; cursor:not-allowed; }
+
+      #osmdOriginal, #osmdTransposed { width:100%; overflow-x:auto; border-radius:12px; background:#fff; padding:8px; border: 1px solid rgba(0,0,0,0.06); }
+      #osmdOriginal svg, #osmdTransposed svg { width:100% !important; height:auto !important; }
+
+      .status { font-weight:700; color:var(--muted); }
+      .log { white-space:pre-wrap; font-family:monospace; font-size:12px; color:#333; }
+
+      #waveCanvas { width:100%; height:70px; border-radius:10px; background:linear-gradient(90deg,#fff0f0,#fffaf0); }
+
+      .result-badge { padding:10px; border-radius:12px; display:inline-block; font-weight:700; }
+
+      /* confetti emojis */
+      .confetti { pointer-events:none; position:fixed; left:0; top:0; width:100%; height:0; overflow:visible; z-index:9999; }
+      .confetti span {
+        position:absolute; font-size:28px; animation:fall 2s linear forwards; transform-origin:center; opacity:0.95;
+      }
+      @keyframes fall {
+        0% { transform: translateY(-40px) rotate(0deg) scale(1); }
+        100% { transform: translateY(110vh) rotate(720deg) scale(1.1); }
       }
 
-      .btn:disabled {
-        background: #aaa;
-      }
+      /* playful footer */
+      footer { text-align:center; color:rgba(0,0,0,0.45); font-size:12px; padding:8px; }
 
-      #osmdOriginal,
-      #osmdTransposed {
-        width: 100%;
-        overflow-x: auto;
-        border: 1px solid var(--border);
-        padding: 8px;
-        border-radius: 12px;
-        background: white;
-        -webkit-overflow-scrolling: touch;
-      }
-
-      #osmdOriginal svg,
-      #osmdTransposed svg {
-        width: 100% !important;
-        height: auto !important;
-      }
-
-      .log {
-        white-space: pre-wrap;
-        font-family: monospace;
-      }
     </style>
   </head>
 
   <body>
     <header>
-      <h1>🎵 Auto‑Chauffe D2a‑1 v11</h1>
+      <h1>🎉 Auto‑Chauffe Rigolote</h1>
+      <div style="font-size:13px; color:#5a5a5a; margin-top:6px">Amusons‑nous avec les notes — branchons le micro et chauffons nos voix !</div>
     </header>
+
     <main>
-      <section>
-        <input type="file" id="xmlInput" accept=".musicxml,.xml" />
-        <div id="fileInfo"></div>
-        <div id="osmdOriginal"></div>
+      <section class="section">
+        <div style="display:flex; gap:12px; align-items:center;">
+          <div style="flex:0 0 110px;">
+            <div class="big-note" id="bigNote">🎵</div>
+          </div>
+          <div style="flex:1">
+            <input type="file" id="xmlInput" accept=".musicxml,.xml" />
+            <div id="fileInfo" style="margin-top:8px; color:#444; font-weight:600"></div>
+            <div id="osmdOriginal" style="margin-top:12px"></div>
+          </div>
+        </div>
       </section>
-      <section>
-        <button id="startAudioBtn" class="btn">🎤 Démarrer l'écoute</button
-        ><button id="stopAudioBtn" class="btn" disabled>🛑 Arrêter</button>
-        <div id="audioStatus"></div>
-        <div id="noteInfo"></div>
-        <div id="intervalInfo"></div>
+
+      <section class="section">
+        <div class="row">
+          <div class="col"><button id="startAudioBtn" class="btn">🎤 Démarrer l'écoute</button></div>
+          <div class="col"><button id="stopAudioBtn" class="btn secondary" disabled>🛑 Arrêter</button></div>
+        </div>
+        <div style="display:flex; gap:12px; margin-top:12px; align-items:center;">
+          <div style="flex:1">
+            <div id="audioStatus" class="status">Micro: inactif</div>
+            <canvas id="waveCanvas"></canvas>
+          </div>
+          <div style="flex:0 0 160px;">
+            <div id="noteInfo" style="font-size:18px; font-weight:800; color:var(--accent);">Note: —</div>
+            <div id="intervalInfo" style="margin-top:6px; color:#666; font-weight:700">Intervalle: —</div>
+          </div>
+        </div>
       </section>
-      <section>
-        <button id="transposeBtn" class="btn" disabled>🎼 Transposer</button>
-        <div id="resultInfo"></div>
-        <div id="osmdTransposed"></div>
+
+      <section class="section">
+        <button id="transposeBtn" class="btn" disabled>🎼 Transposer les notes (Magie)</button>
+        <div id="resultInfo" style="margin-top:10px"></div>
+        <div id="osmdTransposed" style="margin-top:12px"></div>
       </section>
-      <section>
+
+      <section class="section">
         <div id="log" class="log"></div>
       </section>
     </main>
+
+    <div class="confetti" id="confetti"></div>
+    <footer>© Jouons Avec La Musique — Souris, chante et répète !</footer>
+
     <script>
-   /* ==========================================================
-   AUTO-CHAUFFE D2a-1
-
-   Fonctionnement général :
-
-   1. Charger une partition MusicXML
-   2. Afficher la partition
-   3. Détecter une note au microphone
-   4. Calculer un intervalle
-   5. Transposer toutes les notes
-   6. Afficher la partition transposée
-
-   ========================================================== */
       const logDiv = document.getElementById("log");
-      function log(m) {
-        logDiv.textContent += m + "\n";
-      }
-    /* ==========================================================
-   VARIABLES GLOBALES
+      function log(m) { logDiv.textContent += m + "\n"; }
 
-   osmdOriginal    : partition originale
-   osmdTransposed  : partition transposée
+      let osmdOriginal = null, osmdTransposed = null, xmlContent = null, firstNoteMidi = null, playedNote = null, interval = 0;
 
-   xmlContent      : MusicXML chargé
-
-   firstNoteMidi   : première note de la chauffe
-   playedNote      : note détectée au micro
-
-   interval        : différence en demi-tons
-
-   ========================================================== */
-      let osmdOriginal = null,
-        osmdTransposed = null,
-        xmlContent = null,
-        firstNoteMidi = null,
-        playedNote = null,
-        interval = 0;
-   /* ==========================================================
-   AFFICHAGE DES PARTITIONS (OSMD)
-
-   Charge un MusicXML dans OpenSheetMusicDisplay
-   puis adapte automatiquement le zoom
-   à la taille de l'écran.
-
-   ========================================================== */
       async function renderScore(id, xml) {
-        const osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay(id, {
-          autoResize: true,
-          drawingParameters: "compacttight",
-        });
+        const osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay(id, { autoResize:true, drawingParameters: "compacttight" });
         await osmd.load(xml);
         osmd.Zoom = window.innerWidth < 700 ? 0.55 : 0.9;
         osmd.render();
         return osmd;
       }
-    /* ==========================================================
-   CONVERSION NOTE ↔ MIDI
 
-   Exemple :
+      function midiFromNote(s,a,o){ const v={C:0,D:2,E:4,F:5,G:7,A:9,B:11}; return 12*(o+1)+v[s]+a; }
+      function noteFromMidi(m){ const n=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"]; const x=n[m%12]; return { step:x[0], alter:x.includes("#")?1:0, octave:Math.floor(m/12)-1 }; }
 
-   C4 = 60
-   D4 = 62
-   E4 = 64
-
-   Ces fonctions permettent de passer
-   d'une note musicale à sa valeur MIDI
-   et inversement.
-
-   ========================================================== */
-      function midiFromNote(s, a, o) {
-        const v = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
-        return 12 * (o + 1) + v[s] + a;
-      }
-      function noteFromMidi(m) {
-        const n = [
-          "C",
-          "C#",
-          "D",
-          "D#",
-          "E",
-          "F",
-          "F#",
-          "G",
-          "G#",
-          "A",
-          "A#",
-          "B",
-        ];
-        const x = n[m % 12];
-        return {
-          step: x[0],
-          alter: x.includes("#") ? 1 : 0,
-          octave: Math.floor(m / 12) - 1,
-        };
-      }
-    /* ==========================================================
-   CHARGEMENT D'UNE CHAUFFE
-
-   Lorsqu'un MusicXML est chargé :
-
-   - on mémorise son contenu
-   - on détecte sa première note
-   - on affiche la partition
-
-   ========================================================== */
       xmlInput.onchange = () => {
-        const f = xmlInput.files[0];
-        if (!f) return;
-        const r = new FileReader();
-        r.onload = async (e) => {
-          xmlContent = e.target.result;
-          fileInfo.textContent = "Partition chargée : " + f.name;
-          const xml = new DOMParser().parseFromString(
-            xmlContent,
-            "application/xml",
-          );
+        const f = xmlInput.files[0]; if(!f) return; const r = new FileReader(); r.onload = async (e)=>{
+          xmlContent = e.target.result; fileInfo.textContent = "Partition chargée : " + f.name;
+          const xml = new DOMParser().parseFromString(xmlContent, "application/xml");
           const p = xml.querySelector("note pitch");
-          if (p) {
-            firstNoteMidi = midiFromNote(
-              p.querySelector("step").textContent,
-              p.querySelector("alter")
-                ? parseInt(p.querySelector("alter").textContent)
-                : 0,
-              parseInt(p.querySelector("octave").textContent),
-            );
-          }
+          if(p){ firstNoteMidi = midiFromNote(p.querySelector("step").textContent, p.querySelector("alter")?parseInt(p.querySelector("alter").textContent):0, parseInt(p.querySelector("octave").textContent)); }
           osmdOriginal = await renderScore("osmdOriginal", xmlContent);
+          log("Partition affichée : " + f.name);
         };
         r.readAsText(f);
       };
-      window.addEventListener("resize", async () => {
-        if (xmlContent)
-          osmdOriginal = await renderScore("osmdOriginal", xmlContent);
-      });
+
+      window.addEventListener("resize", async ()=>{ if(xmlContent) osmdOriginal = await renderScore("osmdOriginal", xmlContent); });
+
       let audioContext, analyser, mediaStream, audioInterval;
-    /* ==========================================================
-   DETECTION DE HAUTEUR
 
-   Algorithme d'autocorrélation.
+      function autoCorrelate(buffer, sampleRate){ let SIZE=buffer.length, rms=0; for(let i=0;i<SIZE;i++) rms+=buffer[i]*buffer[i]; rms=Math.sqrt(rms/SIZE); if(rms<0.01) return -1; let c=new Array(SIZE).fill(0); for(let i=0;i<SIZE;i++){ for(let j=0;j<SIZE-i;j++) c[i]+=buffer[j]*buffer[j+i]; } let d=0; while(c[d]>c[d+1]) d++; let max=-1,pos=-1; for(let i=d;i<SIZE;i++){ if(c[i]>max){ max=c[i]; pos=i; } } return sampleRate/pos; }
 
-   Entrée :
-       signal microphone
+      function freqToNoteName(freq){ const midi=Math.round(69+12*Math.log2(freq/440)); const note=noteFromMidi(midi); return { midi, display: note.step + (note.alter?"#":"") + note.octave }; }
 
-   Sortie :
-       fréquence dominante (Hz)
+      const waveCanvas = document.getElementById('waveCanvas');
+      const waveCtx = waveCanvas.getContext && waveCanvas.getContext('2d');
+      function resizeCanvas(){ waveCanvas.width = waveCanvas.clientWidth * devicePixelRatio; waveCanvas.height = waveCanvas.clientHeight * devicePixelRatio; if(waveCtx) waveCtx.scale(devicePixelRatio, devicePixelRatio); }
+      window.addEventListener('resize', resizeCanvas);
+      resizeCanvas();
 
-   Exemple :
-
-       440 Hz → La4
-
-   ========================================================== */
-      function autoCorrelate(buffer, sampleRate) {
-        let SIZE = buffer.length,
-          rms = 0;
-        for (let i = 0; i < SIZE; i++) rms += buffer[i] * buffer[i];
-        rms = Math.sqrt(rms / SIZE);
-        if (rms < 0.01) return -1;
-        let c = new Array(SIZE).fill(0);
-        for (let i = 0; i < SIZE; i++) {
-          for (let j = 0; j < SIZE - i; j++) c[i] += buffer[j] * buffer[j + i];
-        }
-        let d = 0;
-        while (c[d] > c[d + 1]) d++;
-        let max = -1,
-          pos = -1;
-        for (let i = d; i < SIZE; i++) {
-          if (c[i] > max) {
-            max = c[i];
-            pos = i;
-          }
-        }
-        return sampleRate / pos;
-      }
-    /* ==========================================================
-   CONVERSION FREQUENCE → NOTE
-
-   Exemple :
-
-       440 Hz → A4
-       261 Hz → C4
-
-   Retourne :
-       MIDI
-       nom de note
-
-   ========================================================== */
-      function freqToNoteName(freq) {
-        const midi = Math.round(69 + 12 * Math.log2(freq / 440));
-        const note = noteFromMidi(midi);
-        return {
-          midi,
-          display: note.step + (note.alter ? "#" : "") + note.octave,
-        };
-      }
-    /* ==========================================================
-   DEMARRAGE DU MICROPHONE
-
-   Compatible Safari iPhone.
-
-   - ouverture du micro
-   - mesure de la fréquence
-   - calcul de l'intervalle
-
-   ========================================================== */
-      startAudioBtn.onclick = async () => {
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        if (audioContext.state === "suspended") await audioContext.resume();
-        mediaStream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-        });
+      startAudioBtn.onclick = async ()=>{
+        audioContext = new (window.AudioContext||window.webkitAudioContext)(); if(audioContext.state === 'suspended') await audioContext.resume();
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio:true });
         const source = audioContext.createMediaStreamSource(mediaStream);
-        analyser = audioContext.createAnalyser();
-        analyser.fftSize = 2048;
-        source.connect(analyser);
-        audioStatus.textContent = "Écoute en cours";
-        startAudioBtn.disabled = true;
-        stopAudioBtn.disabled = false;
+        analyser = audioContext.createAnalyser(); analyser.fftSize = 2048; source.connect(analyser);
+        audioStatus.textContent = "🎧 Écoute en cours — chante fort !"; startAudioBtn.disabled=true; stopAudioBtn.disabled=false;
         const buffer = new Float32Array(analyser.fftSize);
-        audioInterval = setInterval(() => {
+        audioInterval = setInterval(()=>{
           analyser.getFloatTimeDomainData(buffer);
+          // draw waveform
+          if(waveCtx){ waveCtx.clearRect(0,0,waveCanvas.width, waveCanvas.height); const h = waveCanvas.clientHeight; waveCtx.lineWidth = 2; waveCtx.strokeStyle = 'rgba(255,107,107,0.9)'; waveCtx.beginPath(); const step = Math.ceil(buffer.length / waveCanvas.clientWidth);
+            let x=0;
+            for(let i=0;i<buffer.length;i+=step){ const v = buffer[i]*0.9; const y = (1+v)/2 * h; if(i===0) waveCtx.moveTo(x, y); else waveCtx.lineTo(x, y); x++; }
+            waveCtx.stroke(); }
           const freq = autoCorrelate(buffer, audioContext.sampleRate);
-          if (freq > 0) {
-            const d = freqToNoteName(freq);
-            playedNote = d.display;
-            noteInfo.textContent = "Note détectée : " + playedNote;
-            if (firstNoteMidi !== null) {
-              interval = d.midi - firstNoteMidi;
-              intervalInfo.textContent =
-                "Intervalle : " +
-                (interval >= 0 ? "+" : "") +
-                interval +
-                " demi-tons";
-              transposeBtn.disabled = false;
-            }
-          }
-        }, 200);
+          if(freq>0){ const d = freqToNoteName(freq); playedNote = d.display; noteInfo.textContent = "Note: " + playedNote; document.getElementById('bigNote').textContent = playedNote + ' 🎶'; if(firstNoteMidi!==null){ interval = d.midi - firstNoteMidi; intervalInfo.textContent = "Intervalle: " + (interval>=0?"+":"") + interval + " demi‑tons"; transposeBtn.disabled=false; } }
+        }, 160);
       };
-      /************************************************************
-      ARRET DE L'ECOUTE
 
-      - stoppe le timer
-      - ferme les pistes audio
-      - ferme AudioContext
+      stopAudioBtn.onclick = ()=>{ if(audioInterval) clearInterval(audioInterval); if(mediaStream) mediaStream.getTracks().forEach(t=>t.stop()); if(audioContext) audioContext.close(); audioStatus.textContent = "Micro: inactif"; startAudioBtn.disabled=false; stopAudioBtn.disabled=true; };
 
-      ************************************************************/
-      stopAudioBtn.onclick = () => {
-        if (audioInterval) clearInterval(audioInterval);
-        if (mediaStream) mediaStream.getTracks().forEach((t) => t.stop());
-        if (audioContext) audioContext.close();
-      };
-      /* ==========================================================
-      TRANSPOSITION D2a-1
+      function showerConfetti(){ const el = document.getElementById('confetti'); el.innerHTML=''; const emojis = ['🎉','🎈','✨','🎵','🦄','😄']; for(let i=0;i<30;i++){ const s = document.createElement('span'); s.textContent = emojis[Math.floor(Math.random()*emojis.length)]; s.style.left = (Math.random()*100) + '%'; s.style.top = '-40px'; s.style.fontSize = (18 + Math.random()*26) + 'px'; s.style.animationDuration = (1.4 + Math.random()*1.2)+'s'; s.style.opacity = 0.95; el.appendChild(s); setTimeout(()=>s.remove(), 2400); } }
 
-      Pour chaque note :
-
-      1. calcul du MIDI cible
-      2. calcul du nouveau degré diatonique
-      3. recherche de l'octave
-      4. calcul de l'altération
-      5. réécriture du MusicXML
-
-      Résultat :
-       partition entièrement transposée
-
-      ========================================================== */
-      transposeBtn.onclick = async () => {
-        const xmlDoc = new DOMParser().parseFromString(
-          xmlContent,
-          "application/xml",
-        );
-        const notes = xmlDoc.querySelectorAll("note");
-        const order = ["C", "D", "E", "F", "G", "A", "B"];
+      transposeBtn.onclick = async ()=>{
+        const xmlDoc = new DOMParser().parseFromString(xmlContent, 'application/xml');
+        const notes = xmlDoc.querySelectorAll('note');
+        const order = ['C','D','E','F','G','A','B'];
         const firstStep = noteFromMidi(firstNoteMidi).step;
         const playedStep = playedNote[0];
         let d = order.indexOf(playedStep) - order.indexOf(firstStep);
-        if (d < 0) d += 7;
-        notes.forEach((note) => {
-          const pitch = note.querySelector("pitch");
-          if (!pitch) return;
-          const step = pitch.querySelector("step").textContent;
-          const octave = parseInt(pitch.querySelector("octave").textContent);
-          const alterNode = pitch.querySelector("alter");
+        if(d<0) d+=7;
+        notes.forEach((note)=>{
+          const pitch = note.querySelector('pitch'); if(!pitch) return;
+          const step = pitch.querySelector('step').textContent;
+          const octave = parseInt(pitch.querySelector('octave').textContent);
+          const alterNode = pitch.querySelector('alter');
           const alter = alterNode ? parseInt(alterNode.textContent) : 0;
           const midiOld = midiFromNote(step, alter, octave);
           const midiTarget = midiOld + interval;
-          const newStep = order[(order.indexOf(step) + d) % 7];
-          let bestOct = octave,
-            bestDiff = 1e9;
-            /* ==========================================================
-            RECHERCHE DE L'OCTAVE
-
-            ATTENTION :
-
-            Version actuelle limitée à
-            octave-1 → octave+1.
-
-            Cette zone provoque des erreurs
-            lors de grandes transpositions
-            (+24, +31, +36 demi-tons...)
-
-            Prévoir une amélioration future.
-
-            ========================================================== */
-   
-            for (let o = octave - 1; o <= octave + 1; o++) {
-            let diff = Math.abs(midiFromNote(newStep, 0, o) - midiTarget);
-            if (diff < bestDiff) {
-              bestDiff = diff;
-              bestOct = o;
-            }
-          }
-          const base = midiFromNote(newStep, 0, bestOct);
+          const newStep = order[(order.indexOf(step)+d)%7];
+          let bestOct = octave, bestDiff = 1e9;
+          for(let o = octave-1; o<=octave+1; o++){ let diff = Math.abs(midiFromNote(newStep,0,o) - midiTarget); if(diff<bestDiff){ bestDiff=diff; bestOct=o; } }
+          const base = midiFromNote(newStep,0,bestOct);
           let newAlter = midiTarget - base;
-          pitch.querySelector("step").textContent = newStep;
-          pitch.querySelector("octave").textContent = bestOct;
-          if (newAlter !== 0) {
-            if (!alterNode) {
-              const n = xmlDoc.createElement("alter");
-              n.textContent = newAlter;
-              pitch.appendChild(n);
-            } else alterNode.textContent = newAlter;
-          } else if (alterNode) alterNode.remove();
+          pitch.querySelector('step').textContent = newStep;
+          pitch.querySelector('octave').textContent = bestOct;
+          if(newAlter !== 0){ if(!alterNode){ const n = xmlDoc.createElement('alter'); n.textContent = newAlter; pitch.appendChild(n); } else alterNode.textContent = newAlter; } else if(alterNode) alterNode.remove();
         });
         const xmlT = new XMLSerializer().serializeToString(xmlDoc);
-        osmdTransposed = await renderScore("osmdTransposed", xmlT);
-        resultInfo.textContent = "✅ Transposition D2a‑1 effectuée";
+        osmdTransposed = await renderScore('osmdTransposed', xmlT);
+        resultInfo.innerHTML = '<span class="result-badge">✅ Transposition réussie ! Bravo 🎊</span>';
+        showerConfetti();
+        log('Transposition effectuée (Démarrée par enfant joyeux)');
       };
+
     </script>
   </body>
 </html>
