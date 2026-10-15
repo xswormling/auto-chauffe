@@ -7,7 +7,7 @@
       content="width=device-width,initial-scale=1,viewport-fit=cover"
     />
     <meta name="theme-color" content="#ff6b6b" />
-    <title>Auto‑Chauffe — Version Rigolote v14b</title>
+    <title>Auto‑Chauffe — Version Rigolote v14c</title>
     <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@300;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@1.8.9/build/opensheetmusicdisplay.min.js"></script>
     <style>
@@ -95,8 +95,8 @@
 
   <body>
     <header>
-      <h1>🎉 Auto‑Chauffe Rigolote — v14b</h1>
-      <div style="font-size:13px; color:#5a5a5a; margin-top:6px">Corrigé : altérations de précaution après transposition pour cor en Fa</div>
+      <h1>🎉 Auto‑Chauffe Rigolote — v14c</h1>
+      <div style="font-size:13px; color:#5a5a5a; margin-top:6px">Corrigé : bécarres de précaution pour notes hors armure (v14c)</div>
     </header>
 
     <main>
@@ -189,10 +189,22 @@
       }
 
       function getPitchAlterValue(note) {
+        // Return numeric alter value for the note, from <alter> if present, otherwise from <accidental> text if present.
         const pitch = note.querySelector('pitch');
         if (!pitch) return null;
         const alterNode = pitch.querySelector('alter');
-        return alterNode ? parseInt(alterNode.textContent, 10) : 0;
+        if (alterNode) return parseInt(alterNode.textContent, 10);
+        const accNode = note.querySelector('accidental');
+        if (accNode) {
+          const t = accNode.textContent.trim().toLowerCase();
+          if (t === 'sharp' || t === 's' || t === '#') return 1;
+          if (t === 'flat' || t === 'f' || t === 'b') return -1;
+          if (t === 'natural' || t === 'n') return 0;
+          if (t === 'double-sharp' || t === 'doublesharp' || t === '##') return 2;
+          if (t === 'double-flat' || t === 'doubleflat' || t === 'bb') return -2;
+        }
+        // no explicit alter/accidental -> default (no alter)
+        return 0;
       }
 
       function getNoteStep(note) {
@@ -204,13 +216,17 @@
 
       function applyCourtesyAccidental(xmlDoc, note, accidentalValue) {
         const acc = note.querySelector('accidental');
+        const text = accidentalValue > 0 ? 'sharp' : (accidentalValue < 0 ? 'flat' : 'natural');
         if (acc) {
-          acc.textContent = accidentalValue > 0 ? 'sharp' : (accidentalValue < 0 ? 'flat' : 'natural');
+          acc.textContent = text;
           return;
         }
         const accidentalNode = xmlDoc.createElement('accidental');
-        accidentalNode.textContent = accidentalValue > 0 ? 'sharp' : (accidentalValue < 0 ? 'flat' : 'natural');
-        note.appendChild(accidentalNode);
+        accidentalNode.textContent = text;
+        // insert after pitch if possible (common MusicXML order)
+        const pitch = note.querySelector('pitch');
+        if (pitch && pitch.nextSibling) note.insertBefore(accidentalNode, pitch.nextSibling);
+        else note.appendChild(accidentalNode);
       }
 
       function addCourtesyAccidentals(xmlDoc) {
@@ -229,17 +245,20 @@
             if (!previousMeasure) continue;
 
             const previousKeyMap = getKeySignatureMap(previousMeasure);
-            const previousChanged = {};
+            // store previous actual alter per step (numeric), when it differs from previous key
+            const previousAlter = {};
             const prevNotes = Array.from(previousMeasure.querySelectorAll('note'));
             prevNotes.forEach((note) => {
               const step = getNoteStep(note);
               if (!step) return;
               const actualAlter = getPitchAlterValue(note);
-              const keyAlter = previousKeyMap[step] || 0;
-              if (actualAlter !== null && actualAlter !== keyAlter && keyAlter !== 0) {
-                previousChanged[step] = true;
+              const keyAlterPrev = previousKeyMap[step] || 0;
+              if (actualAlter !== null && actualAlter !== keyAlterPrev) {
+                previousAlter[step] = actualAlter;
               }
             });
+
+            if (Object.keys(previousAlter).length === 0) continue;
 
             const seen = {};
             Array.from(measure.querySelectorAll('note')).forEach((note) => {
@@ -248,13 +267,17 @@
               seen[step] = true;
 
               const keyAlter = currentKeyMap[step] || 0;
-              if (keyAlter === 0 || !previousChanged[step]) return;
+              // only if previous measure changed that same step relative to previous key
+              if (typeof previousAlter[step] === 'undefined') return;
 
-              const actualAlter = getPitchAlterValue(note);
-              if (actualAlter === keyAlter) return;
+              const currentActualAlter = getPitchAlterValue(note);
+              // if current note already has an explicit alter different from key, no courtesy needed
+              if (currentActualAlter !== keyAlter) return;
 
-              // Keep the actual pitch untouched; only display the courtesy accidental.
-              applyCourtesyAccidental(xmlDoc, note, keyAlter);
+              // previousAlter[step] differs from current key -> show courtesy accidental for the current default (keyAlter)
+              if (previousAlter[step] !== keyAlter) {
+                applyCourtesyAccidental(xmlDoc, note, keyAlter);
+              }
             });
           }
         });
@@ -433,7 +456,7 @@
         osmdTransposed = await renderScore('osmdTransposed', xmlT);
         resultInfo.innerHTML = '<span class="result-badge">✅ Transposition réussie ! Bravo 🎊</span>';
         showerConfetti();
-        log('Transposition effectuée (V14b) — intervalle : ' + interval + ' demi-tons (cor en Fa)');
+        log('Transposition effectuée (V14c) — intervalle : ' + interval + ' demi-tons (cor en Fa)');
       };
     </script>
   </body>
