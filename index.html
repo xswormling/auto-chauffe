@@ -7,7 +7,7 @@
       content="width=device-width,initial-scale=1,viewport-fit=cover"
     />
     <meta name="theme-color" content="#ff6b6b" />
-    <title>Auto‑Chauffe — Version Rigolote v13a</title>
+    <title>Auto‑Chauffe — Version Rigolote v13b</title>
     <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@300;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@1.8.9/build/opensheetmusicdisplay.min.js"></script>
     <style>
@@ -95,7 +95,7 @@
 
   <body>
     <header>
-      <h1>🎉 Auto‑Chauffe Rigolote — v13a</h1>
+      <h1>🎉 Auto‑Chauffe Rigolote — v13b</h1>
       <div style="font-size:13px; color:#5a5a5a; margin-top:6px">Amusons‑nous avec les notes — branchons le micro et chauffons nos voix !</div>
     </header>
 
@@ -148,7 +148,10 @@
       const logDiv = document.getElementById("log");
       function log(m) { logDiv.textContent += m + "\n"; }
 
-      let osmdOriginal = null, osmdTransposed = null, xmlContent = null, firstNoteMidi = null, playedNote = null, playedMidi = null, interval = 0;
+      let osmdOriginal = null, osmdTransposed = null, xmlContent = null, firstNoteMidi = null;
+      // lastDetected holds the last successfully-detected pitch and will be kept on-screen even if detection momentarily fails
+      let lastDetectedMidi = null, lastDetectedDisplay = null;
+      let playedNote = null, playedMidi = null, interval = 0;
 
       function mod(n, m) { return ((n % m) + m) % m; }
 
@@ -223,7 +226,7 @@
 
             osmdOriginal = await renderScore('osmdOriginal', xmlContent);
             log('Partition affichée : ' + f.name);
-            transposeBtn.disabled = !xmlContent || firstNoteMidi === null;
+            transposeBtn.disabled = !xmlContent || firstNoteMidi === null || !Number.isFinite(lastDetectedMidi);
           } catch (err) {
             log('Erreur lecture XML: ' + err);
             transposeBtn.disabled = true;
@@ -358,25 +361,28 @@
               const d = freqToNoteName(freq);
               playedNote = d.display;
               playedMidi = d.midi;
-              noteInfo.textContent = 'Note: ' + playedNote;
-              bigNote.textContent = playedNote + ' 🎶';
-
-              if (firstNoteMidi !== null && Number.isFinite(playedMidi)) {
-                interval = playedMidi - firstNoteMidi;
-                intervalInfo.textContent = 'Intervalle: ' + interval + ' demi-tons';
-                transposeBtn.disabled = false;
-              } else {
-                intervalInfo.textContent = 'Intervalle: Partition sans note de départ';
-                transposeBtn.disabled = true;
-              }
-            } else {
-              noteInfo.textContent = 'Note: —';
-              bigNote.textContent = '🎵';
-              playedNote = null;
-              playedMidi = null;
-              intervalInfo.textContent = 'Intervalle: —';
-              transposeBtn.disabled = !xmlContent || firstNoteMidi === null;
+              // update last-detected pitch (persist on screen even if detection drops out)
+              lastDetectedDisplay = playedNote;
+              lastDetectedMidi = playedMidi;
             }
+
+            // display the last detected note (if any) so the user doesn't need to press "Arrêter" to keep it
+            const displayNote = lastDetectedDisplay ? lastDetectedDisplay : '—';
+            noteInfo.textContent = 'Note: ' + displayNote;
+            bigNote.textContent = lastDetectedDisplay ? (lastDetectedDisplay + ' 🎶') : '🎵';
+
+            if (firstNoteMidi !== null && Number.isFinite(lastDetectedMidi)) {
+              interval = lastDetectedMidi - firstNoteMidi;
+              intervalInfo.textContent = 'Intervalle: ' + interval + ' demi-tons';
+              transposeBtn.disabled = false;
+            } else if (firstNoteMidi !== null) {
+              intervalInfo.textContent = 'Intervalle: —';
+              transposeBtn.disabled = true;
+            } else {
+              intervalInfo.textContent = 'Intervalle: Partition sans note de départ';
+              transposeBtn.disabled = true;
+            }
+
           }, 160);
         } catch (err) {
           log('Erreur audio: ' + err);
@@ -393,7 +399,8 @@
         audioStatus.textContent = 'Micro: inactif';
         startAudioBtn.disabled = false;
         stopAudioBtn.disabled = true;
-        transposeBtn.disabled = !xmlContent || firstNoteMidi === null;
+        // keep lastDetected displayed after stopping — user requested persistence
+        transposeBtn.disabled = !xmlContent || firstNoteMidi === null || !Number.isFinite(lastDetectedMidi);
       };
 
       function showerConfetti() {
@@ -421,7 +428,7 @@
           log('Impossible : aucune note de départ détectée.');
           return;
         }
-        if (playedMidi === null) {
+        if (lastDetectedMidi === null) {
           log('Impossible : aucune note jouée détectée.');
           return;
         }
@@ -430,10 +437,10 @@
         const notes = xmlDoc.querySelectorAll('note');
         const order = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
         const firstStep = noteFromMidi(firstNoteMidi).step;
-        const playedStep = noteFromMidi(playedMidi).step;
+        const playedStep = noteFromMidi(lastDetectedMidi).step;
 
         let diatonicShift = (order.indexOf(playedStep) - order.indexOf(firstStep) + 7) % 7;
-        if (diatonicShift === 0 && playedMidi !== firstNoteMidi) {
+        if (diatonicShift === 0 && lastDetectedMidi !== firstNoteMidi) {
           diatonicShift = 1;
         }
 
@@ -500,7 +507,7 @@
         osmdTransposed = await renderScore('osmdTransposed', xmlT);
         resultInfo.innerHTML = '<span class="result-badge">✅ Transposition réussie ! Bravo 🎊</span>';
         showerConfetti();
-        log('Transposition effectuée (V13a) — intervalle : ' + interval + ' demi-tons');
+        log('Transposition effectuée (V13b) — intervalle : ' + interval + ' demi-tons');
       };
     </script>
   </body>
