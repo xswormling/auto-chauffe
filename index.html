@@ -7,7 +7,7 @@
       content="width=device-width,initial-scale=1,viewport-fit=cover"
     />
     <meta name="theme-color" content="#ff6b6b" />
-    <title>Auto‑Chauffe — Version Rigolote v14a</title>
+    <title>Auto‑Chauffe — Version Rigolote v14b</title>
     <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@300;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@1.8.9/build/opensheetmusicdisplay.min.js"></script>
     <style>
@@ -95,8 +95,8 @@
 
   <body>
     <header>
-      <h1>🎉 Auto‑Chauffe Rigolote — v14a</h1>
-      <div style="font-size:13px; color:#5a5a5a; margin-top:6px">Amusons‑nous avec les jeunes cornistes — ajout d'altérations de précaution après transposition</div>
+      <h1>🎉 Auto‑Chauffe Rigolote — v14b</h1>
+      <div style="font-size:13px; color:#5a5a5a; margin-top:6px">Corrigé : altérations de précaution après transposition pour cor en Fa</div>
     </header>
 
     <main>
@@ -149,10 +149,9 @@
       function log(m) { logDiv.textContent += m + "\n"; }
 
       // Horn in F: sounding pitch is a perfect fifth (7 semitones) lower than written.
-      const HORN_F_OFFSET = 7; // semitones to add to sounding pitch to get written pitch
+      const HORN_F_OFFSET = 7;
 
       let osmdOriginal = null, osmdTransposed = null, xmlContent = null, firstNoteMidi = null;
-      // lastDetected holds the last successfully-detected sounding pitch; we'll derive written pitch for display & transpose
       let lastDetectedSoundingMidi = null, lastDetectedWrittenMidi = null, lastDetectedDisplay = null;
       let playedNote = null, playedMidi = null, interval = 0;
 
@@ -174,81 +173,89 @@
         return note.step + (note.alter ? '#' : '') + note.octave;
       }
 
-      // compute key signature map (step -> alter) from MusicXML <fifths> value
-      function keyMapFromFifths(fifths) {
+      function getKeySignatureMap(measure) {
+        const fifthsNode = measure.querySelector('attributes > key > fifths');
+        if (!fifthsNode) return {};
+        const fifths = parseInt(fifthsNode.textContent.trim(), 10) || 0;
         const sharps = ['F','C','G','D','A','E','B'];
         const flats = ['B','E','A','D','G','C','F'];
         const map = {};
-        if (!Number.isFinite(fifths)) return map;
-        const f = parseInt(fifths, 10);
-        if (f > 0) {
-          for (let i = 0; i < f && i < sharps.length; i++) map[sharps[i]] = 1;
-        } else if (f < 0) {
-          for (let i = 0; i < -f && i < flats.length; i++) map[flats[i]] = -1;
+        if (fifths > 0) {
+          for (let i = 0; i < Math.min(fifths, sharps.length); i++) map[sharps[i]] = 1;
+        } else if (fifths < 0) {
+          for (let i = 0; i < Math.min(-fifths, flats.length); i++) map[flats[i]] = -1;
         }
         return map;
       }
 
-      // Add courtesy accidentals at the start of measures when previous measure modified a pitch
+      function getPitchAlterValue(note) {
+        const pitch = note.querySelector('pitch');
+        if (!pitch) return null;
+        const alterNode = pitch.querySelector('alter');
+        return alterNode ? parseInt(alterNode.textContent, 10) : 0;
+      }
+
+      function getNoteStep(note) {
+        const pitch = note.querySelector('pitch');
+        if (!pitch) return null;
+        const stepNode = pitch.querySelector('step');
+        return stepNode ? stepNode.textContent.trim() : null;
+      }
+
+      function applyCourtesyAccidental(xmlDoc, note, accidentalValue) {
+        const acc = note.querySelector('accidental');
+        if (acc) {
+          acc.textContent = accidentalValue > 0 ? 'sharp' : (accidentalValue < 0 ? 'flat' : 'natural');
+          return;
+        }
+        const accidentalNode = xmlDoc.createElement('accidental');
+        accidentalNode.textContent = accidentalValue > 0 ? 'sharp' : (accidentalValue < 0 ? 'flat' : 'natural');
+        note.appendChild(accidentalNode);
+      }
+
       function addCourtesyAccidentals(xmlDoc) {
         const parts = Array.from(xmlDoc.querySelectorAll('part'));
-        parts.forEach(part => {
+        parts.forEach((part) => {
           const measures = Array.from(part.querySelectorAll('measure'));
           let currentKeyMap = {};
           for (let i = 0; i < measures.length; i++) {
             const measure = measures[i];
-            // update key map if this measure defines attributes/key/fifths
-            const keyNode = measure.querySelector('attributes > key > fifths');
-            if (keyNode) {
-              currentKeyMap = keyMapFromFifths(keyNode.textContent);
+            const previousMeasure = i > 0 ? measures[i - 1] : null;
+            const measureKeyMap = getKeySignatureMap(measure);
+            if (Object.keys(measureKeyMap).length > 0) {
+              currentKeyMap = measureKeyMap;
             }
-            if (i === 0) continue; // no previous measure
-            const prevMeasure = measures[i - 1];
-            // collect altered steps in previous measure
-            const modified = {};
-            Array.from(prevMeasure.querySelectorAll('note')).forEach(n => {
-              const p = n.querySelector('pitch'); if (!p) return;
-              const step = p.querySelector('step') ? p.querySelector('step').textContent.trim() : null;
-              const alterNode = p.querySelector('alter');
-              if (step && alterNode) modified[step] = parseInt(alterNode.textContent, 10);
+
+            if (!previousMeasure) continue;
+
+            const previousKeyMap = getKeySignatureMap(previousMeasure);
+            const previousChanged = {};
+            const prevNotes = Array.from(previousMeasure.querySelectorAll('note'));
+            prevNotes.forEach((note) => {
+              const step = getNoteStep(note);
+              if (!step) return;
+              const actualAlter = getPitchAlterValue(note);
+              const keyAlter = previousKeyMap[step] || 0;
+              if (actualAlter !== null && actualAlter !== keyAlter && keyAlter !== 0) {
+                previousChanged[step] = true;
+              }
             });
-            if (Object.keys(modified).length === 0) continue;
 
-            // for current measure, for first occurrence of each step, if previous measure modified it and that value differs from key signature, reapply key signature accidental as courtesy
             const seen = {};
-            const notes = Array.from(measure.querySelectorAll('note'));
-            for (const n of notes) {
-              const p = n.querySelector('pitch'); if (!p) continue;
-              const stepNode = p.querySelector('step'); if (!stepNode) continue;
-              const step = stepNode.textContent.trim();
-              if (seen[step]) continue;
+            Array.from(measure.querySelectorAll('note')).forEach((note) => {
+              const step = getNoteStep(note);
+              if (!step || seen[step]) return;
               seen[step] = true;
-              const keyAlter = currentKeyMap[step] || 0;
-              if (keyAlter === 0) continue; // nothing to reapply from key
-              if (!(step in modified)) continue; // previous measure didn't alter this step
-              const prevAlter = modified[step];
-              if (prevAlter === keyAlter) continue; // no change vs key
 
-              // Insert or update alter node to show key signature accidental as courtesy
-              const alterNode = p.querySelector('alter');
-              if (!alterNode) {
-                const newAlter = xmlDoc.createElement('alter');
-                newAlter.textContent = String(keyAlter);
-                // insert after step and before octave
-                const octaveNode = p.querySelector('octave');
-                if (octaveNode) p.insertBefore(newAlter, octaveNode);
-                else p.appendChild(newAlter);
-              } else {
-                alterNode.textContent = String(keyAlter);
-              }
-              // add <accidental> element so rendering shows the accidental explicitly (sharp/flat)
-              const existingAcc = p.querySelector('accidental');
-              if (!existingAcc) {
-                const acc = xmlDoc.createElement('accidental');
-                acc.textContent = keyAlter > 0 ? 'sharp' : (keyAlter < 0 ? 'flat' : 'natural');
-                p.appendChild(acc);
-              }
-            }
+              const keyAlter = currentKeyMap[step] || 0;
+              if (keyAlter === 0 || !previousChanged[step]) return;
+
+              const actualAlter = getPitchAlterValue(note);
+              if (actualAlter === keyAlter) return;
+
+              // Keep the actual pitch untouched; only display the courtesy accidental.
+              applyCourtesyAccidental(xmlDoc, note, keyAlter);
+            });
           }
         });
       }
@@ -262,9 +269,15 @@
           await osmd.load(xml);
           osmd.Zoom = window.innerWidth < 700 ? 0.55 : 0.9;
           osmd.render();
-          requestAnimationFrame(() => { try { osmd.render(); } catch (e) {} setTimeout(() => { try { osmd.render(); } catch (e) {} }, 60); });
-          const svg = container.querySelector('svg'); if (svg) { svg.setAttribute('width', '100%'); svg.style.width = '100%'; svg.style.height = 'auto'; }
-        } catch (err) { console.error('OSMD render failed:', err); }
+          requestAnimationFrame(() => {
+            try { osmd.render(); } catch (e) {}
+            setTimeout(() => { try { osmd.render(); } catch (e) {} }, 60);
+          });
+          const svg = container.querySelector('svg');
+          if (svg) { svg.setAttribute('width', '100%'); svg.style.width = '100%'; svg.style.height = 'auto'; }
+        } catch (err) {
+          console.error('OSMD render failed:', err);
+        }
         return osmd;
       }
 
@@ -286,11 +299,22 @@
               const alter = alterNode ? parseInt(alterNode.textContent, 10) : 0;
               const octaveNode = p.querySelector('octave');
               const octave = octaveNode ? parseInt(octaveNode.textContent, 10) : 4;
-              if (step) { firstNoteMidi = midiFromNote(step, alter, octave); log('Note de départ détectée (écrite) : ' + step + (alter ? '#' : '') + octave + ' (midi ' + firstNoteMidi + ')'); }
-            } else { firstNoteMidi = null; log('Aucune note avec pitch trouvée dans la partition.'); }
-            osmdOriginal = await renderScore('osmdOriginal', xmlContent); log('Partition affichée : ' + f.name);
+              if (step) {
+                firstNoteMidi = midiFromNote(step, alter, octave);
+                log('Note de départ détectée (écrite) : ' + step + (alter ? '#' : '') + octave + ' (midi ' + firstNoteMidi + ')');
+              }
+            } else {
+              firstNoteMidi = null;
+              log('Aucune note avec pitch trouvée dans la partition.');
+            }
+
+            osmdOriginal = await renderScore('osmdOriginal', xmlContent);
+            log('Partition affichée : ' + f.name);
             transposeBtn.disabled = !xmlContent || firstNoteMidi === null || !Number.isFinite(lastDetectedWrittenMidi);
-          } catch (err) { log('Erreur lecture XML: ' + err); transposeBtn.disabled = true; }
+          } catch (err) {
+            log('Erreur lecture XML: ' + err);
+            transposeBtn.disabled = true;
+          }
         };
         r.readAsText(f);
       };
@@ -299,7 +323,6 @@
 
       let audioContext, analyser, mediaStream, audioInterval;
 
-      // Improved autocorrelation: normalized, limited lag range, parabolic interpolation
       function autoCorrelate(buffer, sampleRate) {
         const SIZE = buffer.length; let rms = 0; for (let i = 0; i < SIZE; i++) rms += buffer[i] * buffer[i]; rms = Math.sqrt(rms / SIZE); if (rms < 0.01) return -1;
         const r = new Float64Array(SIZE);
@@ -336,7 +359,6 @@
             const freq = autoCorrelate(buffer, audioContext.sampleRate);
             if (freq > 0) {
               const d = freqToNoteName(freq); playedNote = d.display; playedMidi = d.midi;
-              // convert sounding pitch (playedMidi) to written pitch for horn in F
               lastDetectedSoundingMidi = playedMidi; lastDetectedWrittenMidi = playedMidi + HORN_F_OFFSET; lastDetectedDisplay = formatNoteFromMidi(lastDetectedWrittenMidi);
             }
 
@@ -392,18 +414,26 @@
           else if (newAlter < -2) { while (newAlter < -2) { bestOct -= 1; newAlter = midiTarget - midiFromNote(newStep, 0, bestOct); } }
 
           stepNode.textContent = newStep; octaveNode.textContent = String(bestOct);
-          if (newAlter !== 0) { if (!alterNode) { const newAlterNode = xmlDoc.createElement('alter'); newAlterNode.textContent = String(newAlter); pitch.insertBefore(newAlterNode, octaveNode); } else { alterNode.textContent = String(newAlter); } }
-          else if (alterNode) { alterNode.parentNode.removeChild(alterNode); }
+          if (newAlter !== 0) {
+            if (!alterNode) {
+              const newAlterNode = xmlDoc.createElement('alter');
+              newAlterNode.textContent = String(newAlter);
+              pitch.insertBefore(newAlterNode, octaveNode);
+            } else {
+              alterNode.textContent = String(newAlter);
+            }
+          } else if (alterNode) {
+            alterNode.parentNode.removeChild(alterNode);
+          }
         });
 
-        // add courtesy accidentals based on key signatures and previous measure modifications
         try { addCourtesyAccidentals(xmlDoc); } catch (e) { console.warn('Courtesy accidental pass failed', e); }
 
         const xmlT = new XMLSerializer().serializeToString(xmlDoc);
         osmdTransposed = await renderScore('osmdTransposed', xmlT);
         resultInfo.innerHTML = '<span class="result-badge">✅ Transposition réussie ! Bravo 🎊</span>';
         showerConfetti();
-        log('Transposition effectuée (V14a) — intervalle : ' + interval + ' demi-tons (pour cor en Fa)');
+        log('Transposition effectuée (V14b) — intervalle : ' + interval + ' demi-tons (cor en Fa)');
       };
     </script>
   </body>
