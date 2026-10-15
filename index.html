@@ -7,7 +7,7 @@
       content="width=device-width,initial-scale=1,viewport-fit=cover"
     />
     <meta name="theme-color" content="#ff6b6b" />
-    <title>Auto‑Chauffe — Version Rigolote</title>
+    <title>Auto‑Chauffe — Version Rigolote v13</title>
     <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@300;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@1.8.9/build/opensheetmusicdisplay.min.js"></script>
     <style>
@@ -70,7 +70,8 @@
       .btn:disabled { opacity:0.5; cursor:not-allowed; }
 
       #osmdOriginal, #osmdTransposed { width:100%; overflow-x:auto; border-radius:12px; background:#fff; padding:8px; border: 1px solid rgba(0,0,0,0.06); }
-      #osmdOriginal svg, #osmdTransposed svg { width:100% !important; height:auto !important; }
+      #osmdOriginal, #osmdTransposed { -webkit-transform: translateZ(0); will-change: transform; }
+      #osmdOriginal svg, #osmdTransposed svg { width:100% !important; height:auto !important; display:block; }
 
       .status { font-weight:700; color:var(--muted); }
       .log { white-space:pre-wrap; font-family:monospace; font-size:12px; color:#333; }
@@ -79,7 +80,6 @@
 
       .result-badge { padding:10px; border-radius:12px; display:inline-block; font-weight:700; }
 
-      /* confetti emojis */
       .confetti { pointer-events:none; position:fixed; left:0; top:0; width:100%; height:0; overflow:visible; z-index:9999; }
       .confetti span {
         position:absolute; font-size:28px; animation:fall 2s linear forwards; transform-origin:center; opacity:0.95;
@@ -89,15 +89,13 @@
         100% { transform: translateY(110vh) rotate(720deg) scale(1.1); }
       }
 
-      /* playful footer */
       footer { text-align:center; color:rgba(0,0,0,0.45); font-size:12px; padding:8px; }
-
     </style>
   </head>
 
   <body>
     <header>
-      <h1>🎉 Auto‑Chauffe Rigolote</h1>
+      <h1>🎉 Auto‑Chauffe Rigolote — v13</h1>
       <div style="font-size:13px; color:#5a5a5a; margin-top:6px">Amusons‑nous avec les notes — branchons le micro et chauffons nos voix !</div>
     </header>
 
@@ -150,100 +148,331 @@
       const logDiv = document.getElementById("log");
       function log(m) { logDiv.textContent += m + "\n"; }
 
-      let osmdOriginal = null, osmdTransposed = null, xmlContent = null, firstNoteMidi = null, playedNote = null, interval = 0;
+      let osmdOriginal = null, osmdTransposed = null, xmlContent = null, firstNoteMidi = null, playedNote = null, playedMidi = null, interval = 0;
+
+      function mod(n, m) { return ((n % m) + m) % m; }
+
+      function midiFromNote(s, a, o) {
+        const v = { C:0, D:2, E:4, F:5, G:7, A:9, B:11 };
+        return 12 * (o + 1) + v[s] + a;
+      }
+
+      function noteFromMidi(m) {
+        const n = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+        const x = n[mod(m, 12)];
+        return { step: x[0], alter: x.includes("#") ? 1 : 0, octave: Math.floor(m / 12) - 1 };
+      }
 
       async function renderScore(id, xml) {
-        const osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay(id, { autoResize:true, drawingParameters: "compacttight" });
-        await osmd.load(xml);
-        osmd.Zoom = window.innerWidth < 700 ? 0.55 : 0.9;
-        osmd.render();
+        const container = document.getElementById(id);
+        if (!container) return null;
+        container.innerHTML = '';
+        const osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay(container, { autoResize: true, drawingParameters: 'compacttight' });
+        try {
+          await osmd.load(xml);
+          osmd.Zoom = window.innerWidth < 700 ? 0.55 : 0.9;
+          osmd.render();
+          requestAnimationFrame(() => {
+            try { osmd.render(); } catch (e) {}
+            setTimeout(() => {
+              try { osmd.render(); } catch (e) {}
+            }, 60);
+          });
+          const svg = container.querySelector('svg');
+          if (svg) {
+            svg.setAttribute('width', '100%');
+            svg.style.width = '100%';
+            svg.style.height = 'auto';
+          }
+        } catch (err) {
+          console.error('OSMD render failed:', err);
+        }
         return osmd;
       }
 
-      function midiFromNote(s,a,o){ const v={C:0,D:2,E:4,F:5,G:7,A:9,B:11}; return 12*(o+1)+v[s]+a; }
-      function noteFromMidi(m){ const n=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"]; const x=n[m%12]; return { step:x[0], alter:x.includes("#")?1:0, octave:Math.floor(m/12)-1 }; }
+      const xmlInput = document.getElementById('xmlInput');
+      const fileInfo = document.getElementById('fileInfo');
+      const transposeBtn = document.getElementById('transposeBtn');
 
       xmlInput.onchange = () => {
-        const f = xmlInput.files[0]; if(!f) return; const r = new FileReader(); r.onload = async (e)=>{
-          xmlContent = e.target.result; fileInfo.textContent = "Partition chargée : " + f.name;
-          const xml = new DOMParser().parseFromString(xmlContent, "application/xml");
-          const p = xml.querySelector("note pitch");
-          if(p){ firstNoteMidi = midiFromNote(p.querySelector("step").textContent, p.querySelector("alter")?parseInt(p.querySelector("alter").textContent):0, parseInt(p.querySelector("octave").textContent)); }
-          osmdOriginal = await renderScore("osmdOriginal", xmlContent);
-          log("Partition affichée : " + f.name);
+        const f = xmlInput.files[0];
+        if (!f) return;
+        const r = new FileReader();
+        r.onload = async (e) => {
+          xmlContent = e.target.result;
+          fileInfo.textContent = 'Partition chargée : ' + f.name;
+
+          try {
+            const xml = new DOMParser().parseFromString(xmlContent, 'application/xml');
+            const note = Array.from(xml.querySelectorAll('note')).find((n) => n.querySelector('pitch'));
+            if (note) {
+              const p = note.querySelector('pitch');
+              const step = p.querySelector('step') ? p.querySelector('step').textContent.trim() : null;
+              const alterNode = p.querySelector('alter');
+              const alter = alterNode ? parseInt(alterNode.textContent, 10) : 0;
+              const octaveNode = p.querySelector('octave');
+              const octave = octaveNode ? parseInt(octaveNode.textContent, 10) : 4;
+              if (step) {
+                firstNoteMidi = midiFromNote(step, alter, octave);
+                log('Note de départ détectée : ' + step + (alter ? '#' : '') + octave + ' (midi ' + firstNoteMidi + ')');
+              }
+            } else {
+              firstNoteMidi = null;
+              log('Aucune note avec pitch trouvée dans la partition.');
+            }
+
+            osmdOriginal = await renderScore('osmdOriginal', xmlContent);
+            log('Partition affichée : ' + f.name);
+            transposeBtn.disabled = !xmlContent || firstNoteMidi === null;
+          } catch (err) {
+            log('Erreur lecture XML: ' + err);
+            transposeBtn.disabled = true;
+          }
         };
         r.readAsText(f);
       };
 
-      window.addEventListener("resize", async ()=>{ if(xmlContent) osmdOriginal = await renderScore("osmdOriginal", xmlContent); });
+      window.addEventListener('resize', async () => {
+        if (xmlContent) {
+          osmdOriginal = await renderScore('osmdOriginal', xmlContent);
+        }
+      });
 
       let audioContext, analyser, mediaStream, audioInterval;
 
-      function autoCorrelate(buffer, sampleRate){ let SIZE=buffer.length, rms=0; for(let i=0;i<SIZE;i++) rms+=buffer[i]*buffer[i]; rms=Math.sqrt(rms/SIZE); if(rms<0.01) return -1; let c=new Array(SIZE).fill(0); for(let i=0;i<SIZE;i++){ for(let j=0;j<SIZE-i;j++) c[i]+=buffer[j]*buffer[j+i]; } let d=0; while(c[d]>c[d+1]) d++; let max=-1,pos=-1; for(let i=d;i<SIZE;i++){ if(c[i]>max){ max=c[i]; pos=i; } } return sampleRate/pos; }
+      function autoCorrelate(buffer, sampleRate) {
+        let SIZE = buffer.length;
+        let rms = 0;
+        for (let i = 0; i < SIZE; i++) rms += buffer[i] * buffer[i];
+        rms = Math.sqrt(rms / SIZE);
+        if (rms < 0.01) return -1;
 
-      function freqToNoteName(freq){ const midi=Math.round(69+12*Math.log2(freq/440)); const note=noteFromMidi(midi); return { midi, display: note.step + (note.alter?"#":"") + note.octave }; }
+        let r = new Array(SIZE).fill(0);
+        for (let lag = 0; lag < SIZE; lag++) {
+          let sum = 0;
+          for (let i = 0; i < SIZE - lag; i++) sum += buffer[i] * buffer[i + lag];
+          r[lag] = sum;
+        }
+
+        let peak = -1;
+        let peakIndex = -1;
+        for (let i = 1; i < SIZE / 2; i++) {
+          if (r[i] > peak) {
+            peak = r[i];
+            peakIndex = i;
+          }
+        }
+
+        if (peakIndex <= 0) return -1;
+        return sampleRate / peakIndex;
+      }
+
+      function freqToNoteName(freq) {
+        const midi = Math.round(69 + 12 * Math.log2(freq / 440));
+        const note = noteFromMidi(midi);
+        return { midi, display: note.step + (note.alter ? '#' : '') + note.octave };
+      }
 
       const waveCanvas = document.getElementById('waveCanvas');
       const waveCtx = waveCanvas.getContext && waveCanvas.getContext('2d');
-      function resizeCanvas(){ waveCanvas.width = waveCanvas.clientWidth * devicePixelRatio; waveCanvas.height = waveCanvas.clientHeight * devicePixelRatio; if(waveCtx) waveCtx.scale(devicePixelRatio, devicePixelRatio); }
+
+      function resizeCanvas() {
+        const ratio = window.devicePixelRatio || 1;
+        waveCanvas.width = Math.round(waveCanvas.clientWidth * ratio);
+        waveCanvas.height = Math.round(waveCanvas.clientHeight * ratio);
+        if (waveCtx) waveCtx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      }
+
       window.addEventListener('resize', resizeCanvas);
       resizeCanvas();
 
-      startAudioBtn.onclick = async ()=>{
-        audioContext = new (window.AudioContext||window.webkitAudioContext)(); if(audioContext.state === 'suspended') await audioContext.resume();
-        mediaStream = await navigator.mediaDevices.getUserMedia({ audio:true });
+      const startAudioBtn = document.getElementById('startAudioBtn');
+      const stopAudioBtn = document.getElementById('stopAudioBtn');
+      const audioStatus = document.getElementById('audioStatus');
+      const noteInfo = document.getElementById('noteInfo');
+      const intervalInfo = document.getElementById('intervalInfo');
+      const bigNote = document.getElementById('bigNote');
+
+      startAudioBtn.onclick = async () => {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioContext.state === 'suspended') await audioContext.resume();
+
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         const source = audioContext.createMediaStreamSource(mediaStream);
-        analyser = audioContext.createAnalyser(); analyser.fftSize = 2048; source.connect(analyser);
-        audioStatus.textContent = "🎧 Écoute en cours — chante fort !"; startAudioBtn.disabled=true; stopAudioBtn.disabled=false;
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 2048;
+        source.connect(analyser);
+
+        audioStatus.textContent = '🎧 Écoute en cours — chante fort !';
+        startAudioBtn.disabled = true;
+        stopAudioBtn.disabled = false;
+
         const buffer = new Float32Array(analyser.fftSize);
-        audioInterval = setInterval(()=>{
+        audioInterval = setInterval(() => {
           analyser.getFloatTimeDomainData(buffer);
-          // draw waveform
-          if(waveCtx){ waveCtx.clearRect(0,0,waveCanvas.width, waveCanvas.height); const h = waveCanvas.clientHeight; waveCtx.lineWidth = 2; waveCtx.strokeStyle = 'rgba(255,107,107,0.9)'; waveCtx.beginPath(); const step = Math.ceil(buffer.length / waveCanvas.clientWidth);
-            let x=0;
-            for(let i=0;i<buffer.length;i+=step){ const v = buffer[i]*0.9; const y = (1+v)/2 * h; if(i===0) waveCtx.moveTo(x, y); else waveCtx.lineTo(x, y); x++; }
-            waveCtx.stroke(); }
+
+          if (waveCtx) {
+            const w = waveCanvas.clientWidth;
+            const h = waveCanvas.clientHeight;
+            waveCtx.clearRect(0, 0, waveCanvas.width, waveCanvas.height);
+            waveCtx.beginPath();
+            waveCtx.lineWidth = 2;
+            waveCtx.strokeStyle = 'rgba(255,107,107,0.9)';
+            const step = Math.ceil(buffer.length / w);
+            let x = 0;
+            for (let i = 0; i < buffer.length; i += step) {
+              const v = buffer[i] * 0.9;
+              const y = (1 + v) / 2 * h;
+              if (i === 0) waveCtx.moveTo(x, y);
+              else waveCtx.lineTo(x, y);
+              x++;
+            }
+            waveCtx.stroke();
+          }
+
           const freq = autoCorrelate(buffer, audioContext.sampleRate);
-          if(freq>0){ const d = freqToNoteName(freq); playedNote = d.display; noteInfo.textContent = "Note: " + playedNote; document.getElementById('bigNote').textContent = playedNote + ' 🎶'; if(firstNoteMidi!==null){ interval = d.midi - firstNoteMidi; intervalInfo.textContent = "Intervalle: " + (interval>=0?"+":"") + interval + " demi‑tons"; transposeBtn.disabled=false; } }
+          if (freq > 0) {
+            const d = freqToNoteName(freq);
+            playedNote = d.display;
+            playedMidi = d.midi;
+            noteInfo.textContent = 'Note: ' + playedNote;
+            bigNote.textContent = playedNote + ' 🎶';
+
+            if (firstNoteMidi !== null) {
+              interval = playedMidi - firstNoteMidi;
+              intervalInfo.textContent = 'Intervalle: ' + interval + ' demi-tons';
+              transposeBtn.disabled = false;
+            } else {
+              intervalInfo.textContent = 'Intervalle: Partition sans note de départ';
+              transposeBtn.disabled = true;
+            }
+          } else {
+            noteInfo.textContent = 'Note: —';
+            bigNote.textContent = '🎵';
+            playedNote = null;
+            playedMidi = null;
+            intervalInfo.textContent = 'Intervalle: —';
+          }
         }, 160);
       };
 
-      stopAudioBtn.onclick = ()=>{ if(audioInterval) clearInterval(audioInterval); if(mediaStream) mediaStream.getTracks().forEach(t=>t.stop()); if(audioContext) audioContext.close(); audioStatus.textContent = "Micro: inactif"; startAudioBtn.disabled=false; stopAudioBtn.disabled=true; };
+      stopAudioBtn.onclick = () => {
+        if (audioInterval) clearInterval(audioInterval);
+        if (mediaStream) mediaStream.getTracks().forEach((t) => t.stop());
+        if (audioContext) audioContext.close();
+        audioStatus.textContent = 'Micro: inactif';
+        startAudioBtn.disabled = false;
+        stopAudioBtn.disabled = true;
+      };
 
-      function showerConfetti(){ const el = document.getElementById('confetti'); el.innerHTML=''; const emojis = ['🎉','🎈','✨','🎵','🦄','😄']; for(let i=0;i<30;i++){ const s = document.createElement('span'); s.textContent = emojis[Math.floor(Math.random()*emojis.length)]; s.style.left = (Math.random()*100) + '%'; s.style.top = '-40px'; s.style.fontSize = (18 + Math.random()*26) + 'px'; s.style.animationDuration = (1.4 + Math.random()*1.2)+'s'; s.style.opacity = 0.95; el.appendChild(s); setTimeout(()=>s.remove(), 2400); } }
+      function showerConfetti() {
+        const el = document.getElementById('confetti');
+        el.innerHTML = '';
+        const emojis = ['🎉', '🎈', '✨', '🎵', '🦄', '😄'];
+        for (let i = 0; i < 30; i++) {
+          const s = document.createElement('span');
+          s.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+          s.style.left = (Math.random() * 100) + '%';
+          s.style.top = (Math.random() * 10) + 'vh';
+          s.style.fontSize = (16 + Math.random() * 20) + 'px';
+          s.style.animationDelay = (Math.random() * 0.6) + 's';
+          el.appendChild(s);
+          setTimeout(() => s.remove(), 2600);
+        }
+      }
 
-      transposeBtn.onclick = async ()=>{
+      transposeBtn.onclick = async () => {
+        if (!xmlContent) {
+          log('Aucune partition chargée.');
+          return;
+        }
+        if (firstNoteMidi === null) {
+          log('Impossible : aucune note de départ détectée.');
+          return;
+        }
+        if (playedMidi === null) {
+          log('Impossible : aucune note jouée détectée.');
+          return;
+        }
+
         const xmlDoc = new DOMParser().parseFromString(xmlContent, 'application/xml');
         const notes = xmlDoc.querySelectorAll('note');
-        const order = ['C','D','E','F','G','A','B'];
+        const order = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
         const firstStep = noteFromMidi(firstNoteMidi).step;
-        const playedStep = playedNote[0];
-        let d = order.indexOf(playedStep) - order.indexOf(firstStep);
-        if(d<0) d+=7;
-        notes.forEach((note)=>{
-          const pitch = note.querySelector('pitch'); if(!pitch) return;
-          const step = pitch.querySelector('step').textContent;
-          const octave = parseInt(pitch.querySelector('octave').textContent);
+        const playedStep = noteFromMidi(playedMidi).step;
+
+        let diatonicShift = (order.indexOf(playedStep) - order.indexOf(firstStep) + 7) % 7;
+        if (diatonicShift === 0 && playedMidi !== firstNoteMidi) {
+          // preserve movement even for same letter names across octave jumps
+          diatonicShift = 1;
+        }
+
+        notes.forEach((note) => {
+          const pitch = note.querySelector('pitch');
+          if (!pitch) return;
+
+          const stepNode = pitch.querySelector('step');
+          const octaveNode = pitch.querySelector('octave');
+          if (!stepNode || !octaveNode) return;
+
+          const oldStep = stepNode.textContent.trim();
+          const oldOctave = parseInt(octaveNode.textContent, 10);
           const alterNode = pitch.querySelector('alter');
-          const alter = alterNode ? parseInt(alterNode.textContent) : 0;
-          const midiOld = midiFromNote(step, alter, octave);
+          const oldAlter = alterNode ? parseInt(alterNode.textContent, 10) : 0;
+
+          const midiOld = midiFromNote(oldStep, oldAlter, oldOctave);
           const midiTarget = midiOld + interval;
-          const newStep = order[(order.indexOf(step)+d)%7];
-          let bestOct = octave, bestDiff = 1e9;
-          for(let o = octave-1; o<=octave+1; o++){ let diff = Math.abs(midiFromNote(newStep,0,o) - midiTarget); if(diff<bestDiff){ bestDiff=diff; bestOct=o; } }
-          const base = midiFromNote(newStep,0,bestOct);
+          const newStep = order[(order.indexOf(oldStep) + diatonicShift) % 7];
+
+          let bestOct = oldOctave;
+          let bestDiff = Infinity;
+          for (let o = oldOctave - 2; o <= oldOctave + 2; o++) {
+            const candidate = midiFromNote(newStep, 0, o);
+            const diff = Math.abs(candidate - midiTarget);
+            if (diff < bestDiff) {
+              bestDiff = diff;
+              bestOct = o;
+            }
+          }
+
+          const base = midiFromNote(newStep, 0, bestOct);
           let newAlter = midiTarget - base;
-          pitch.querySelector('step').textContent = newStep;
-          pitch.querySelector('octave').textContent = bestOct;
-          if(newAlter !== 0){ if(!alterNode){ const n = xmlDoc.createElement('alter'); n.textContent = newAlter; pitch.appendChild(n); } else alterNode.textContent = newAlter; } else if(alterNode) alterNode.remove();
+
+          // keep the octave coherent if the chromatic target drifts too far from natural note
+          if (newAlter > 2) {
+            while (newAlter > 2) {
+              bestOct += 1;
+              newAlter = midiTarget - midiFromNote(newStep, 0, bestOct);
+            }
+          } else if (newAlter < -2) {
+            while (newAlter < -2) {
+              bestOct -= 1;
+              newAlter = midiTarget - midiFromNote(newStep, 0, bestOct);
+            }
+          }
+
+          stepNode.textContent = newStep;
+          octaveNode.textContent = String(bestOct);
+
+          if (newAlter !== 0) {
+            if (!alterNode) {
+              const newAlterNode = xmlDoc.createElement('alter');
+              newAlterNode.textContent = String(newAlter);
+              pitch.appendChild(newAlterNode);
+            } else {
+              alterNode.textContent = String(newAlter);
+            }
+          } else if (alterNode) {
+            alterNode.parentNode.removeChild(alterNode);
+          }
         });
+
         const xmlT = new XMLSerializer().serializeToString(xmlDoc);
         osmdTransposed = await renderScore('osmdTransposed', xmlT);
         resultInfo.innerHTML = '<span class="result-badge">✅ Transposition réussie ! Bravo 🎊</span>';
         showerConfetti();
-        log('Transposition effectuée (Démarrée par enfant joyeux)');
+        log('Transposition effectuée (V13) — intervalle : ' + interval + ' demi-tons');
       };
-
     </script>
   </body>
 </html>
